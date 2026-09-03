@@ -1,16 +1,19 @@
 ## Hi there 👋
+Mariano Parró
+Business Development & Strategy at Pearson | Former BCG Partner in Education and Public Sector | HBS/HKS
 
-<!--
-**marianoparro/marianoparro** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
+I work on business development and growth: building partnerships, evaluating 
+new products and investments, and leading due diligence on new commercial 
+opportunities. Increasingly focused on how AI is reshaping business models 
+and go-to-market strategy.
 
-Here are some ideas to get you started:
+Background across management consulting, corporate development, venture 
+building, and public policy, with deep experience in Latin America and 
+North America.
 
-- 🔭 I’m currently working on ...
-- 🌱 I’m currently learning ...
-- 👯 I’m looking to collaborate on ...
-- 🤔 I’m looking for help with ...
-- 💬 Ask me about ...
-- 📫 How to reach me: ...
-- 😄 Pronouns: ...
-- ⚡ Fun fact: ...
--->
+Interests: applied AI in business strategy, EdTech, workforce development, 
+and technology adoption across Latin America.
+
+Fluent in English and Spanish.
+
+Contact: marianoparro@gmail.com
