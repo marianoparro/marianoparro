@@ -1,6 +1,7 @@
 """Parse a Chase CSV export and store it in the transactions table."""
 
 import csv
+import html
 import io
 import re
 import sqlite3
@@ -37,7 +38,8 @@ def parse_chase_csv(text: str) -> list[dict]:
             {
                 "date": date.isoformat(),
                 "month": date.strftime("%Y-%m"),
-                "description": raw["Description"].strip(),
+                # Chase escapes '&' as '&amp;' in some rows ("H&amp;M").
+                "description": html.unescape(raw["Description"]).strip(),
                 "amount": round(-float(raw["Amount"]), 2),
             }
         )

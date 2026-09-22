@@ -17,6 +17,7 @@ SAMPLE = """Transaction Date,Post Date,Description,Category,Type,Amount,Memo
 04/15/2026,04/17/2026,SUMESA OAXACA,Groceries,Sale,-1100.00,
 04/10/2026,04/12/2026,SOME NEW PLACE,Food & Drink,Sale,-12.00,
 04/05/2026,04/06/2026,JUAN VALDEZ ARP INTERN,Food & Drink,Sale,-8.54,
+04/09/2026,04/11/2026,H&amp;M  0450MIAMI,Shopping,Sale,-39.38,
 04/01/2026,04/01/2026,Payment Thank You-Mobile,,Payment,6931.34,
 """
 
@@ -44,7 +45,7 @@ def test_normalize_merchant():
 
 def test_import_and_dedup(client):
     first = upload(client)
-    assert first["imported"] == 13  # payment row skipped
+    assert first["imported"] == 14  # payment row skipped
     assert first["duplicates"] == 0
     assert first["uncategorized"] == 2  # SOME NEW PLACE, JUAN VALDEZ
     assert first["oneoffs"] == 1  # PUBLIC STORAGE, not JUAN VALDEZ "ARP IN"
@@ -54,7 +55,7 @@ def test_import_and_dedup(client):
 
     again = upload(client)
     assert again["imported"] == 0
-    assert again["duplicates"] == 13
+    assert again["duplicates"] == 14
 
 
 def test_categories(client):
@@ -62,6 +63,7 @@ def test_categories(client):
     txs = {t["description"]: t for t in client.get("/transactions?month=2026-04").json()}
     assert txs["UBER* EATS"]["category"] == "Food & Dining"  # odd spacing still matches
     assert txs["Amazon.com  Inc. AMZN"]["category"] == "Shopping"
+    assert txs["H&M  0450MIAMI"]["category"] == "Shopping"  # '&amp;' unescaped
     assert txs["AUNA ONCO ONLINE 4"]["is_fixed"] is True
     assert txs["PUBLIC STORAGE 26904"]["is_oneoff"] is True
     march = client.get("/transactions?month=2026-03").json()
