@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Family Budget</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Family Budget</h1>
+    <label class="month-picker">
+      <span class="sr-only">Month</span>
+      <select id="month-select" aria-label="Month"></select>
+    </label>
+  </header>
+
+  <main>
+    <!-- Headline numbers for the selected month -->
+    <section class="tiles" id="tiles" aria-live="polite"></section>
+
+    <!-- Variable spend per month vs target; click a bar to open that month -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Monthly variable spend</h2>
+        <p class="muted" id="trend-note"></p>
+      </div>
+      <div class="chart" id="trend-chart"></div>
+    </section>
+
+    <div class="two-col">
+      <!-- Actual vs target per category -->
+      <section class="card">
+        <div class="card-head">
+          <h2>By category</h2>
+          <p class="muted">Bar = spent · tick = target · click a row to filter transactions</p>
+        </div>
+        <ul class="cat-list" id="categories"></ul>
+      </section>
+
+      <!-- One-offs: kept out of the averages, but always listed -->
+      <section class="card">
+        <div class="card-head">
+          <h2>One-offs this month</h2>
+          <p class="muted">Recorded, but excluded from the averages</p>
+        </div>
+        <ul class="plain-list" id="oneoffs"></ul>
+      </section>
+    </div>
+
+    <!-- Every transaction; change a category to teach the app -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Transactions</h2>
+        <div class="filters">
+          <select id="cat-filter" aria-label="Filter by category"></select>
+          <input id="search" type="search" placeholder="Search description" aria-label="Search">
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="tx-table">
+          <thead>
+            <tr><th>Date</th><th>Description</th><th class="num">Amount</th><th>Category</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted" id="tx-count"></p>
+    </section>
+
+    <!-- Import Chase CSVs -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Import Chase CSVs</h2>
+        <p class="muted">Re-importing is safe: duplicates are skipped</p>
+      </div>
+      <label class="dropzone" id="dropzone">
+        <input type="file" id="file-input" accept=".csv,.CSV" multiple>
+        <span>Drop CSV files here or <u>choose files</u></span>
+      </label>
+      <div id="import-result"></div>
+    </section>
+  </main>
+
+  <div class="tooltip" id="tooltip" role="status" hidden></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

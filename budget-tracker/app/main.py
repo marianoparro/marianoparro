@@ -2,10 +2,14 @@
 Then open http://127.0.0.1:8000/docs for a clickable API explorer.
 """
 
+import os
 import re
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.db import get_conn, init_db
@@ -27,6 +31,57 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Family Budget Tracker", lifespan=lifespan)
+
+STATIC_DIR = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.get("/", include_in_schema=False)
+def index():
+    return FileResponse(STATIC_DIR / "index.html")
+
+
+def _env_money(name: str) -> float | None:
+    value = os.environ.get(name)
+    return float(value) if value else None
+
+
+@app.get("/config")
+def config():
+    """Income and fixed costs come from environment variables, not code,
+    so they never end up in the (public) git repo. Unset -> null, and the
+    frontend simply hides the savings tile."""
+    with get_conn() as conn:
+        categories = [r["category"] for r in conn.execute("SELECT category FROM budget_targets")]
+        tax = conn.execute(
+            "SELECT monthly_target FROM budget_targets WHERE category = 'Taxes'"
+        ).fetchone()
+    return {
+        "categories": categories + [ONEOFF, FIXED],
+        "monthly_net_income": _env_money("MONTHLY_NET_INCOME"),
+        "monthly_fixed_costs": _env_money("MONTHLY_FIXED_COSTS"),
+        "yearly_savings_goal": _env_money("YEARLY_SAVINGS_GOAL"),
+        "monthly_tax_setaside": tax["monthly_target"] if tax else 0,
+    }
+
+
+@app.get("/months")
+def months():
+    """One row per month with data, oldest first — feeds the trend chart."""
+    with get_conn() as conn:
+        (variable_target,) = conn.execute(
+            "SELECT COALESCE(SUM(monthly_target), 0) FROM budget_targets"
+        ).fetchone()
+        rows = conn.execute(
+            """SELECT month,
+                      ROUND(SUM(CASE WHEN is_oneoff = 0 AND is_fixed = 0 THEN amount ELSE 0 END), 2)
+                        AS variable_total,
+                      ROUND(SUM(CASE WHEN is_oneoff = 1 THEN amount ELSE 0 END), 2) AS oneoff_total,
+                      MIN(date) AS first_date,
+                      MAX(date) AS last_date
+               FROM transactions GROUP BY month ORDER BY month"""
+        ).fetchall()
+    return [{**dict(r), "variable_target": variable_target} for r in rows]
 
 
 def _check_month(month: str) -> None:

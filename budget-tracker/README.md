@@ -3,6 +3,29 @@
 Personal budget tracker for Mariano + Maura (CDMX). FastAPI + SQLite, with an
 HTML/JS frontend and a Claude-powered assistant coming in later steps.
 
+## Step 2: Web dashboard
+
+Start the server (below) and open http://127.0.0.1:8000. One page, plain
+HTML/CSS/JS in `app/static/` (no build step):
+
+- **Tiles:** variable spend vs target, one-offs, uncategorized, and savings
+  vs the $50k/yr goal
+- **Trend chart:** monthly variable spend vs target; hover for detail, click
+  a bar to open that month. Striped bars with `*` are partial months.
+- **By category:** spent (bar) vs target (tick); click a row to filter
+- **Transactions:** change a category → it saves a *rule* for that merchant,
+  so every month (past and future) is fixed at once
+- **Import:** drag and drop Chase CSVs
+
+The savings tile needs income and fixed costs. These are read from
+environment variables so they never land in git:
+
+```bash
+export MONTHLY_NET_INCOME=...   MONTHLY_FIXED_COSTS=...   YEARLY_SAVINGS_GOAL=...
+```
+
+Saved = income − fixed costs − variable spend − tax set-aside − one-offs.
+
 ## Step 1: CSV importer + database
 
 ```
@@ -11,7 +34,8 @@ app/
   db.py          SQLite schema, connection, seeding on startup
   categorize.py  merchant name cleanup + pattern matching
   importer.py    Chase CSV parsing, dedup, insert
-  main.py        API routes
+  main.py        API routes + serves the dashboard
+  static/        the dashboard: index.html, style.css, app.js
 tests/           pytest, synthetic data only
 ```
 

@@ -128,3 +128,22 @@ def test_large_medical_bill_is_oneoff_but_recorded(client):
     assert health["actual"] == 12.0  # parking counts, the big bill doesn't
     assert s["oneoffs"] == [{"date": "2026-09-15", "description": "MSMC MYCHART BILLPAY",
                              "amount": 1028.84, "category": "Health & Wellness"}]
+
+
+def test_frontend_and_months(client, monkeypatch):
+    assert "Family Budget" in client.get("/").text
+    upload(client)
+    months = client.get("/months").json()
+    assert [m["month"] for m in months] == ["2026-03", "2026-04"]
+    april = months[1]
+    # same number /summary reports: everything except one-offs and fixed
+    assert april["variable_total"] == client.get("/summary/2026-04").json()["variable_total"]
+    assert april["variable_target"] == 5365
+
+
+def test_config_reads_income_from_env(client, monkeypatch):
+    cfg = client.get("/config").json()
+    assert cfg["monthly_net_income"] is None  # not set -> savings tile hidden
+    assert "Food & Dining" in cfg["categories"] and "One-off" in cfg["categories"]
+    monkeypatch.setenv("MONTHLY_NET_INCOME", "1000")
+    assert client.get("/config").json()["monthly_net_income"] == 1000.0
