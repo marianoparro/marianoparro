@@ -115,3 +115,16 @@ def test_user_rule_recategorizes(client):
     assert txs["SOME NEW PLACE"]["category"] == "Food & Dining"
     bad = client.post("/merchant-map", json={"pattern": "X", "category": "Nope"})
     assert bad.status_code == 400
+
+
+def test_large_medical_bill_is_oneoff_but_recorded(client):
+    text = """Transaction Date,Post Date,Description,Category,Type,Amount,Memo
+09/15/2026,09/16/2026,MSMC MYCHART BILLPAY,Health & Wellness,Sale,-1028.84,
+09/16/2026,09/17/2026,MSMC MAIN GARAGE,Health & Wellness,Sale,-12.00,
+"""
+    upload(client, text)
+    s = client.get("/summary/2026-09").json()
+    health = next(c for c in s["categories"] if c["category"] == "Health & Wellness")
+    assert health["actual"] == 12.0  # parking counts, the big bill doesn't
+    assert s["oneoffs"] == [{"date": "2026-09-15", "description": "MSMC MYCHART BILLPAY",
+                             "amount": 1028.84, "category": "Health & Wellness"}]

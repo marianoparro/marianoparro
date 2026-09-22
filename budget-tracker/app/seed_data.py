@@ -38,6 +38,9 @@ MERCHANT_MAP = {
         "ZARA", "HUGO BOSS", "OLD NAVY", "MADEWELL", "BRFACTORY", "CARTERS",
         "BAMBIBABY", "INTER MIAMI CF RETAIL", "LEVI", "J.CREW", "VICTORIA",
         "H&M", "DECATHLON", "DEEPSTASH",
+        # Rare but recurring, so they count in averages (not one-offs):
+        "I RUN & COMPANY",  # running shoes, ~1x/year
+        "MONICA VINADER",  # gifts, ~2x/year
     ],
     "Travel": [
         "AMERICAN AI", "LATAM AIRLIN", "TACAINTL", "UNITED AIR", "MARRIOTT",
@@ -81,11 +84,13 @@ MERCHANT_MAP = {
         "GO NAILS",
         "SHANNON-USHER",  # recurring coaching
         "VAGARO",
+        "DHL",  # immigration paperwork errands, ~1x/year
     ],
     ONEOFF: [
         "ARPIN", "PUBLIC STORAGE", "USCIS", "INM RECAUDA", "NIC*-FL SUNBIZ",
         "USCUSTOMS",
         "TARGET",  # one-time clothes shopping, not ongoing
+        "PALACIO HIERRO", "APRENDE PEQUE",
     ],
     FIXED: [
         "AUNA",  # parents' insurance + Maura care
@@ -94,7 +99,12 @@ MERCHANT_MAP = {
 }
 
 # Merchants that keep their normal category but become one-offs above a
-# dollar threshold, e.g. a big lab bill vs. a routine test.
+# dollar threshold: large medical bills are recorded under Health & Wellness
+# but kept out of averages; routine co-pays and parking still count.
 CONDITIONAL_ONEOFFS = {
     "QUEST DIAG": 100,
+    "MSMC": 100,
+    "UHEALTH": 100,
+    "UNIVERSITY OF MIAMI": 100,
+    "NICKLAUS": 100,
 }

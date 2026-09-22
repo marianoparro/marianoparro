@@ -110,6 +110,15 @@ def summary(month: str):
                FROM transactions WHERE month = ?""",
             (month,),
         ).fetchone()
+        # One-offs stay out of the averages but are still listed, never hidden.
+        oneoffs = [
+            dict(r)
+            for r in conn.execute(
+                """SELECT date, description, amount, category FROM transactions
+                   WHERE month = ? AND is_oneoff = 1 ORDER BY amount DESC""",
+                (month,),
+            )
+        ]
 
     categories = []
     # Budgeted categories first, then any category that has spend but no target.
@@ -135,6 +144,7 @@ def summary(month: str):
         "variable_target": sum(targets.values()),
         "uncategorized_total": extras["uncategorized"],
         "oneoff_total": extras["oneoffs"],
+        "oneoffs": oneoffs,
         "fixed_on_card_total": extras["fixed"],
     }
 
