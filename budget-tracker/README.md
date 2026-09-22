@@ -33,6 +33,10 @@ curl -F "files=@Chase6297_Activity20260324_20260423.CSV" http://127.0.0.1:8000/i
 curl http://127.0.0.1:8000/summary/2026-04
 curl "http://127.0.0.1:8000/transactions?month=2026-04"
 
+# teach it a merchant; every stored transaction is re-categorized
+curl -X POST http://127.0.0.1:8000/merchant-map -H 'Content-Type: application/json' \
+     -d '{"pattern": "CAFE NIDDO", "category": "Food & Dining"}'
+
 pytest   # run the tests
 ```
 
@@ -51,6 +55,9 @@ pytest   # run the tests
 - **Flags:** `One-off` patterns set `is_oneoff`; `Fixed` patterns (Auna,
   Totalplay) set `is_fixed`. Both are left out of variable totals in `/summary`.
   A category is `over_target` when it is more than 30% above target.
+- **Categories follow the map.** On startup and after `POST /merchant-map`,
+  every stored transaction is re-matched, so a map change fixes history too.
+  Patterns you add (`added_by='user'`) are never overwritten by the seed list.
 - **Auto-surfaced on import:** every one-off plus any single charge over $200
   (the `flagged` list in the `/import` response).
 

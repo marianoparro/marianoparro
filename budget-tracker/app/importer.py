@@ -46,13 +46,40 @@ def parse_chase_csv(text: str) -> list[dict]:
     return rows
 
 
-def import_rows(
-    conn: sqlite3.Connection, rows: list[dict], card_last4: str | None
-) -> dict:
-    merchant_map = {
+def load_merchant_map(conn: sqlite3.Connection) -> dict[str, str]:
+    return {
         r["merchant_pattern"]: r["category"]
         for r in conn.execute("SELECT merchant_pattern, category FROM merchant_map")
     }
+
+
+def recategorize(conn: sqlite3.Connection) -> int:
+    """Re-run matching on every stored transaction; return how many changed.
+
+    Categories are derived from merchant_map, so whenever the map changes
+    (new seed patterns, a user correction) we recompute instead of leaving
+    old rows stuck with the old answer.
+    """
+    merchant_map = load_merchant_map(conn)
+    changed = 0
+    for r in conn.execute(
+        "SELECT id, description, amount, category, is_oneoff, is_fixed FROM transactions"
+    ).fetchall():
+        m = categorize(r["description"], r["amount"], merchant_map)
+        new = (m.category, int(m.is_oneoff), int(m.is_fixed))
+        if new != (r["category"], r["is_oneoff"], r["is_fixed"]):
+            conn.execute(
+                "UPDATE transactions SET category = ?, is_oneoff = ?, is_fixed = ? WHERE id = ?",
+                (*new, r["id"]),
+            )
+            changed += 1
+    return changed
+
+
+def import_rows(
+    conn: sqlite3.Connection, rows: list[dict], card_last4: str | None
+) -> dict:
+    merchant_map = load_merchant_map(conn)
 
     # Dedup. A plain "skip if it already exists" rule would wrongly drop real
     # repeats — e.g. two identical $5.24 Uber rides on the same day. So we

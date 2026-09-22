@@ -87,3 +87,31 @@ def test_summary(client):
 
 def test_bad_month(client):
     assert client.get("/summary/2026-4").status_code == 400
+
+
+def test_new_patterns(client):
+    text = """Transaction Date,Post Date,Description,Category,Type,Amount,Memo
+08/20/2026,08/23/2026,DLO UBERRIDES CA2,Travel,Sale,-35.43,
+08/21/2026,08/23/2026,DLO*UBER,Travel,Sale,-4.37,
+08/22/2026,08/23/2026,DLO*UBER EATS,Food & Drink,Sale,-61.32,
+05/18/2026,05/19/2026,TARGET        00021881,Shopping,Sale,-107.02,
+03/22/2026,03/23/2026,CARULLA FRESH COUNTRY,Groceries,Sale,-169.77,
+"""
+    upload(client, text)
+    txs = {t["description"]: t for m in ("2026-03", "2026-05", "2026-08")
+           for t in client.get(f"/transactions?month={m}").json()}
+    assert txs["DLO UBERRIDES CA2"]["category"] == "Transport"
+    assert txs["DLO*UBER"]["category"] == "Transport"
+    assert txs["DLO*UBER EATS"]["category"] == "Food & Dining"  # longer pattern wins
+    assert txs["TARGET        00021881"]["is_oneoff"] is True
+    assert txs["CARULLA FRESH COUNTRY"]["category"] == "Groceries"
+
+
+def test_user_rule_recategorizes(client):
+    upload(client)
+    r = client.post("/merchant-map", json={"pattern": "some new place", "category": "Food & Dining"})
+    assert r.json()["transactions_updated"] == 1
+    txs = {t["description"]: t for t in client.get("/transactions?month=2026-04").json()}
+    assert txs["SOME NEW PLACE"]["category"] == "Food & Dining"
+    bad = client.post("/merchant-map", json={"pattern": "X", "category": "Nope"})
+    assert bad.status_code == 400

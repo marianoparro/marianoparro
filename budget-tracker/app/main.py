@@ -6,9 +6,11 @@ import re
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel
 
 from app.db import get_conn, init_db
-from app.importer import card_from_filename, import_rows, parse_chase_csv
+from app.importer import card_from_filename, import_rows, parse_chase_csv, recategorize
+from app.seed_data import FIXED, ONEOFF
 
 # A category is flagged when actual spend is more than this % above target.
 OVER_TARGET_PCT = 30
@@ -19,6 +21,8 @@ MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()  # create tables + load targets and merchant map
+    with get_conn() as conn:
+        recategorize(conn)  # apply any map changes to already-imported rows
     yield
 
 
@@ -50,6 +54,33 @@ async def import_csv(
             for k in totals:
                 totals[k] += result[k]
     return {**totals, "files": per_file}
+
+
+class MerchantRule(BaseModel):
+    pattern: str  # substring of the bank description, e.g. "CARULLA"
+    category: str
+
+
+@app.post("/merchant-map")
+def add_merchant_rule(rule: MerchantRule):
+    """Teach the app a merchant. Also what the Step 3 agent will call on corrections."""
+    pattern = rule.pattern.strip().upper()
+    if not pattern:
+        raise HTTPException(400, "pattern can't be empty")
+    with get_conn() as conn:
+        valid = {r["category"] for r in conn.execute("SELECT category FROM budget_targets")}
+        valid |= {ONEOFF, FIXED}
+        if rule.category not in valid:
+            raise HTTPException(400, f"category must be one of: {sorted(valid)}")
+        conn.execute(
+            """INSERT INTO merchant_map (merchant_pattern, category, added_by)
+               VALUES (?, ?, 'user')
+               ON CONFLICT(merchant_pattern) DO UPDATE
+               SET category = excluded.category, added_by = 'user'""",
+            (pattern, rule.category),
+        )
+        changed = recategorize(conn)
+    return {"pattern": pattern, "category": rule.category, "transactions_updated": changed}
 
 
 @app.get("/summary/{month}")

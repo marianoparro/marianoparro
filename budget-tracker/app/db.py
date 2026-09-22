@@ -86,3 +86,11 @@ def seed(conn: sqlite3.Connection) -> None:
         """,
         rows,
     )
+    # A pattern deleted from seed_data.py must leave the DB too, or a stale
+    # longer pattern (e.g. "TARGET T-") would keep beating its replacement.
+    seeded = [pattern for pattern, _ in rows]
+    conn.execute(
+        f"DELETE FROM merchant_map WHERE added_by = 'seed' "
+        f"AND merchant_pattern NOT IN ({','.join('?' * len(seeded))})",
+        seeded,
+    )

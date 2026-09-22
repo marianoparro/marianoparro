@@ -31,9 +31,10 @@ MERCHANT_MAP = {
         "DLO*RAPPI", "CASA NAGI", "EKILORE", "EL TIGRE", "GIORNALE",
         "BOSTON BAKERY", "JOE VENTURES", "LU PARTNERS", "TST*", "MAMAN",
         "CHICK-FIL", "MCDONALD", "MC DONALD", "BURGER", "STARBUCKS", "DOORDASH",
+        "UBER EATS",
     ],
     "Shopping": [
-        "AMAZON", "AMZN", "WALMART.COM", "TARGET T-", "TEMU", "NORDSTROM",
+        "AMAZON", "AMZN", "WALMART.COM", "TEMU", "NORDSTROM",
         "ZARA", "HUGO BOSS", "OLD NAVY", "MADEWELL", "BRFACTORY", "CARTERS",
         "BAMBIBABY", "INTER MIAMI CF RETAIL", "LEVI", "J.CREW", "VICTORIA",
         "H&M", "DECATHLON", "DEEPSTASH",
@@ -47,18 +48,24 @@ MERCHANT_MAP = {
         "SHELL", "CHEVRON", "MARATHON", "GASOL", "EXXON", "SUNPASS",
         "MPA PARKING", "SPOTHERO", "MIDTOWN MIAMI CDD", "PAYBYPHONE",
         "CORAL GABLES PAY",
+        # Uber rides in CDMX: real, ongoing transport while we have no car.
+        "DLO UBERRIDES", "UBER RIDES", "UBER TRIP", "DLO*UBER",  # "DLO*UBER EATS" is longer, so eats still win
     ],
     "Groceries": [
         "SUMESA", "PUBLIX", "ALDI", "WHOLEFDS", "TRADER JOE", "OXXO",
         "WALMART",  # in-store; WALMART.COM (longer) wins for online orders
         "PRICE CHOICE", "7 ELEVEN", "NATURAL POLANCO", "CK LIEJA",
         "MERPAGO*ANEC", "MERPAGO*DELI", "EST NATURAL",
+        # Lima / Bogota supermarkets
+        "CARULLA", "WONG", "VIVANDA", "PVEA", "JUMBO", "TIENDAS D1",
+        "SUPERMERCADO", "LA MARGARITA", "ZOCO FRESH",
     ],
     "Health & Wellness": [
         "UHEALTH", "MSMC", "NICKLAUS", "QUEST DIAG", "CVS", "WALGREEN",
         "FARMATO", "CLINICA", "AWAKE ANIMAL", "DRA YOLANDA", "CLIP MX*AMAM",
         "AMAMANTANDO", "SMARTFIT", "CONEKTA*SICLO", "ZTL*SICLO",
         "ACUATIC",  # Mateo's swim lessons
+        "SICLO", "UNIVERSITY OF MIAMI",
     ],
     "Entertainment": [
         "CINEPOLIS", "ZOO DE CHAP", "PINECREST", "FROST SCIENCE",
@@ -78,6 +85,7 @@ MERCHANT_MAP = {
     ONEOFF: [
         "ARPIN", "PUBLIC STORAGE", "USCIS", "INM RECAUDA", "NIC*-FL SUNBIZ",
         "USCUSTOMS",
+        "TARGET",  # one-time clothes shopping, not ongoing
     ],
     FIXED: [
         "AUNA",  # parents' insurance + Maura care
