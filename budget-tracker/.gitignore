@@ -1,0 +1,9 @@
+# Never commit real bank data or the database — this repo may be public.
+*.csv
+*.CSV
+*.db
+*.db-journal
+__pycache__/
+.pytest_cache/
+.venv/
+.env

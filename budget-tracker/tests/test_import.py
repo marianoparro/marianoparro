@@ -1,0 +1,87 @@
+import pytest
+from fastapi.testclient import TestClient
+
+from app.categorize import normalize_merchant
+
+SAMPLE = """Transaction Date,Post Date,Description,Category,Type,Amount,Memo
+04/20/2026,04/22/2026,DLO RAPPI,Food & Drink,Sale,-324.11,
+04/20/2026,04/22/2026,DLO RAPPI,Food & Drink,Return,16.15,
+04/19/2026,04/21/2026,DLO UBEREATS CA2,Food & Drink,Sale,-51.66,
+04/20/2026,04/20/2026,UBER* EATS,Food & Drink,Sale,-20.80,
+04/09/2026,04/12/2026,UBER   *TRIP,Travel,Sale,-5.24,
+04/09/2026,04/12/2026,UBER   *TRIP,Travel,Sale,-5.24,
+04/20/2026,04/22/2026,Amazon.com  Inc. AMZN,Bills & Utilities,Sale,-33.76,
+03/09/2026,03/09/2026,AMZN Digital*BE9MG9S80,Shopping,Sale,-19.99,
+04/04/2026,04/05/2026,AUNA ONCO ONLINE 4,Bills & Utilities,Sale,-431.01,
+04/03/2026,04/03/2026,PUBLIC STORAGE 26904,Home,Sale,-281.00,
+04/15/2026,04/17/2026,SUMESA OAXACA,Groceries,Sale,-1100.00,
+04/10/2026,04/12/2026,SOME NEW PLACE,Food & Drink,Sale,-12.00,
+04/05/2026,04/06/2026,JUAN VALDEZ ARP INTERN,Food & Drink,Sale,-8.54,
+04/01/2026,04/01/2026,Payment Thank You-Mobile,,Payment,6931.34,
+"""
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.db.DB_PATH", str(tmp_path / "test.db"))
+    from app.main import app
+
+    with TestClient(app) as c:
+        yield c
+
+
+def upload(client, text=SAMPLE, name="Chase6297_Activity.CSV"):
+    return client.post("/import", files=[("files", (name, text, "text/csv"))]).json()
+
+
+def test_normalize_merchant():
+    assert normalize_merchant("AMAZON MKTPL*GK3V04R63") == "AMAZON MKTPL"
+    assert normalize_merchant("PUBLIX #1662") == "PUBLIX"
+    assert normalize_merchant("AMERICAN AIR0012318120817") == "AMERICAN AIR"
+    assert normalize_merchant("UBER   *EATS") == "UBER *EATS"
+    assert normalize_merchant("SUPERMERCADO LA GRANJI X3") == "SUPERMERCADO LA GRANJI"
+
+
+def test_import_and_dedup(client):
+    first = upload(client)
+    assert first["imported"] == 13  # payment row skipped
+    assert first["duplicates"] == 0
+    assert first["uncategorized"] == 2  # SOME NEW PLACE, JUAN VALDEZ
+    assert first["oneoffs"] == 1  # PUBLIC STORAGE, not JUAN VALDEZ "ARP IN"
+    assert first["files"][0]["card_last4"] == "6297"
+    flagged = {f["description"] for f in first["flagged"]}
+    assert flagged == {"DLO RAPPI", "PUBLIC STORAGE 26904", "SUMESA OAXACA", "AUNA ONCO ONLINE 4"}
+
+    again = upload(client)
+    assert again["imported"] == 0
+    assert again["duplicates"] == 13
+
+
+def test_categories(client):
+    upload(client)
+    txs = {t["description"]: t for t in client.get("/transactions?month=2026-04").json()}
+    assert txs["UBER* EATS"]["category"] == "Food & Dining"  # odd spacing still matches
+    assert txs["Amazon.com  Inc. AMZN"]["category"] == "Shopping"
+    assert txs["AUNA ONCO ONLINE 4"]["is_fixed"] is True
+    assert txs["PUBLIC STORAGE 26904"]["is_oneoff"] is True
+    march = client.get("/transactions?month=2026-03").json()
+    assert march[0]["category"] == "Bills & Utilities"  # AMZN DIGITAL beats AMZN
+
+
+def test_summary(client):
+    upload(client)
+    s = client.get("/summary/2026-04").json()
+    cats = {c["category"]: c for c in s["categories"]}
+    food = cats["Food & Dining"]
+    assert food["actual"] == round(324.11 - 16.15 + 51.66 + 20.80, 2)
+    assert food["over_target"] is False
+    assert cats["Groceries"]["actual"] == 1100.0
+    assert cats["Groceries"]["over_target"] is True  # 37.5% over target
+    assert cats["Transport"]["actual"] == 10.48
+    assert s["fixed_on_card_total"] == 431.01
+    assert s["oneoff_total"] == 281.0
+    assert s["uncategorized_total"] == 20.54
+
+
+def test_bad_month(client):
+    assert client.get("/summary/2026-4").status_code == 400
