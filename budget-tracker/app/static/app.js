@@ -59,6 +59,7 @@ const hideTip = () => { tip.hidden = true; };
 async function init() {
   [state.config, state.months] = await Promise.all([api("/config"), api("/months")]);
   if (state.config.user) $("#who").textContent = `Hi, ${state.config.user}`;
+  loadChat();
   if (!state.months.length) {
     $("#tiles").innerHTML = `<div class="tile"><div class="label">No data yet</div><div class="sub">Import a Chase CSV below to get started.</div></div>`;
     renderFilterOptions();
@@ -428,12 +429,101 @@ async function importFiles(files) {
     out.innerHTML = `
       <p><b>${r.imported}</b> imported · ${r.duplicates} duplicates skipped · ${r.uncategorized} uncategorized · ${r.oneoffs} one-offs</p>
       ${flagged.length ? `<p class="muted">Worth a look: one-offs and single charges over $200</p>
-      <ul class="plain-list">${flagged.map((f) => `<li><span class="desc">${esc(f.description)}<span class="date">${shortDate(f.date)} · ${esc(f.category || "Uncategorized")} · ${esc(f.reason)}</span></span><b>${usd2.format(f.amount)}</b></li>`).join("")}</ul>` : ""}`;
+      <ul class="plain-list">${flagged.map((f) => `<li><span class="desc">${esc(f.description)}<span class="date">${shortDate(f.date)} · ${esc(f.category || "Uncategorized")} · ${esc(f.reason)}</span></span><b>${usd2.format(f.amount)}</b></li>`).join("")}</ul>
+      <button class="primary" id="ask-flagged" type="button">Ask the assistant about these</button>` : ""}`;
+    const askFlagged = $("#ask-flagged");
+    if (askFlagged) askFlagged.onclick = () => {
+      const list = flagged.map((f) => `${f.date} ${f.description} $${f.amount}`).join("; ");
+      $("#ask").scrollIntoView({ behavior: "smooth" });
+      askAssistant(`I just imported new charges. These were flagged (one-offs or over $200): ${list}. Anything I should look at or recategorize?`);
+    };
     await (state.months.length ? refreshAll() : init());
   } catch (err) {
     out.innerHTML = `<p class="badge critical">✕ ${esc(err.message)}</p>`;
   }
 }
+
+// ---------- assistant chat ----------
+const CHIPS = [
+  "Why is food so high this month?",
+  "Break down my Amazon charges",
+  "Health this month vs last month",
+  "Where can we cut to hit our savings goal?",
+];
+
+// Tiny, safe formatter for the assistant's replies: escape everything first,
+// then allow **bold** and "- " bullet lists. No raw HTML ever gets through.
+function formatReply(text) {
+  const blocks = [];
+  let list = null;
+  for (const raw of esc(text).split("\n")) {
+    const line = raw.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+    if (/^\s*[-•]\s+/.test(line)) {
+      if (!list) { list = []; blocks.push(list); }
+      list.push(line.replace(/^\s*[-•]\s+/, ""));
+    } else {
+      list = null;
+      if (line.trim()) blocks.push(line);
+    }
+  }
+  return blocks.map((b) => Array.isArray(b) ? `<ul>${b.map((i) => `<li>${i}</li>`).join("")}</ul>` : `<p>${b}</p>`).join("");
+}
+
+function addMessage(role, text, extra = "") {
+  const div = document.createElement("div");
+  div.className = `msg ${role}`;
+  div.innerHTML = role === "assistant" ? formatReply(text) + extra : esc(text);
+  $("#chat-log").append(div);
+  $("#chat-log").scrollTop = $("#chat-log").scrollHeight;
+  $("#chat-clear").hidden = false;
+  return div;
+}
+
+async function loadChat() {
+  $("#chat-chips").innerHTML = CHIPS.map((q) => `<button type="button">${esc(q)}</button>`).join("");
+  $("#chat-chips").querySelectorAll("button").forEach((b) => b.onclick = () => askAssistant(b.textContent));
+  try {
+    const history = await api("/chat");
+    $("#chat-log").innerHTML = "";
+    history.forEach((m) => addMessage(m.role, m.content));
+    $("#chat-clear").hidden = !history.length;
+  } catch { /* chat history is optional; the page works without it */ }
+}
+
+// The assistant sees the selected month as context, so "this month" means
+// the month you're looking at.
+async function askAssistant(question) {
+  question = question.trim();
+  if (!question) return;
+  const monthNote = state.month ? ` (I'm looking at ${monthName(state.month, "long")}.)` : "";
+  addMessage("user", question);
+  const pending = addMessage("assistant thinking", "Looking at your transactions…");
+  $("#chat-input").value = "";
+  $("#chat-form button").disabled = true;
+  try {
+    const r = await api("/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: question + monthNote }),
+    });
+    pending.remove();
+    addMessage("assistant", r.reply);
+    // A rule saved from chat changes categories: refresh the numbers.
+    if (r.tools_used.includes("set_merchant_category")) await refreshAll();
+  } catch (err) {
+    pending.className = "msg error";
+    pending.textContent = err.message;
+  } finally {
+    $("#chat-form button").disabled = false;
+  }
+}
+
+$("#chat-form").addEventListener("submit", (e) => { e.preventDefault(); askAssistant($("#chat-input").value); });
+$("#chat-clear").addEventListener("click", async () => {
+  await api("/chat", { method: "DELETE" });
+  $("#chat-log").innerHTML = "";
+  $("#chat-clear").hidden = true;
+});
 
 // ---------- wire up ----------
 $("#month-select").addEventListener("change", (e) => selectMonth(e.target.value));

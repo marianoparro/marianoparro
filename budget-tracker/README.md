@@ -29,6 +29,28 @@ export MONTHLY_NET_INCOME=...  FIXED_COSTS="Rent:2500,..."  YEARLY_SAVINGS_GOAL=
 
 Saved = income − fixed costs − variable spend − tax set-aside − one-offs.
 
+## Step 3: Budget assistant (Claude)
+
+The "Ask about your spending" card sends questions to Claude
+(`claude-sonnet-4-6`; change with `ANTHROPIC_MODEL`). Code: `app/assistant.py`.
+
+- **Context each question:** targets, income/fixed plan, every month's totals
+  by category, and 3-month averages over *complete* months (partial months
+  are flagged, not averaged). About 1.5k tokens.
+- **Tools Claude can call** (run by our server against SQLite):
+  `query_transactions` (filters: months, category, text, min amount),
+  `top_merchants` (spend per merchant), and `set_merchant_category`, which
+  saves a rule exactly like the dashboard does, *only* when you correct it.
+- **Conversations** are saved per person in `chat_messages`; Claude sees the
+  last 20 messages so follow-ups work. "New conversation" clears yours.
+- **After an import**, "Ask the assistant about these" sends the flagged
+  charges (one-offs and anything over $200) for a review.
+- **Cost:** roughly 1-2 cents per question.
+- Without `ANTHROPIC_API_KEY` the rest of the app works and the chat says so.
+
+`HOUSEHOLD_NOTES` (optional) is free text the assistant always knows, e.g.
+who Mateo is or that Acuatic is swim lessons. Kept out of git like income.
+
 ## Deploy to Render + share with the family
 
 `render.yaml` (repo root) describes the whole service. Everything private is
@@ -40,6 +62,8 @@ an environment variable you type into Render, never a file in git:
 | `MONTHLY_NET_INCOME` | `15293` | income tile |
 | `FIXED_COSTS` | `Rent:2500,Domestic help:1561,Montessori:883,...` | fixed costs, itemized |
 | `YEARLY_SAVINGS_GOAL` | `50000` | savings vs goal |
+| `ANTHROPIC_API_KEY` | `sk-ant-...` | the assistant |
+| `HOUSEHOLD_NOTES` | `Mateo is our son; Acuatic = his swim lessons; ...` | optional, for the assistant |
 
 (`MONTHLY_FIXED_COSTS=5645` still works if you'd rather give one total with no breakdown.)
 
@@ -67,6 +91,8 @@ app/
   importer.py    Chase CSV parsing, dedup, insert
   main.py        API routes + serves the dashboard
   auth.py        family login (APP_USERS env var)
+  settings.py    income / fixed costs / goal from env vars
+  assistant.py   Step 3: Claude + tools over your data
   static/        the dashboard: index.html, style.css, app.js
 tests/           pytest, synthetic data only
 ```

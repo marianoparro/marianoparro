@@ -37,6 +37,20 @@
       <div id="flow-body"></div>
     </section>
 
+    <!-- Step 3: ask questions in plain language -->
+    <section class="card" id="ask">
+      <div class="card-head">
+        <h2>Ask about your spending</h2>
+        <button class="link-btn" id="chat-clear" hidden>New conversation</button>
+      </div>
+      <div class="chat-log" id="chat-log" aria-live="polite"></div>
+      <div class="chips" id="chat-chips"></div>
+      <form class="chat-form" id="chat-form">
+        <input id="chat-input" type="text" autocomplete="off" placeholder="e.g. Why is food so high this month?" aria-label="Your question">
+        <button class="primary" type="submit">Ask</button>
+      </form>
+    </section>
+
     <!-- Variable spend per month vs target; click a bar to open that month -->
     <section class="card">
       <div class="card-head">

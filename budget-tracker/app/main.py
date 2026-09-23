@@ -2,7 +2,6 @@
 Then open http://127.0.0.1:8000/docs for a clickable API explorer.
 """
 
-import os
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -12,9 +11,10 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from app import assistant, settings
 from app.auth import require_login
 from app.db import get_conn, init_db
-from app.importer import card_from_filename, import_rows, parse_chase_csv, recategorize
+from app.importer import card_from_filename, import_rows, parse_chase_csv, recategorize, save_rule
 from app.seed_data import FIXED, ONEOFF
 
 # A category is flagged when actual spend is more than this % above target.
@@ -43,39 +43,11 @@ def index():
     return FileResponse(STATIC_DIR / "index.html")
 
 
-def _env_money(name: str) -> float | None:
-    value = os.environ.get(name)
-    return float(value) if value else None
-
-
-def _env_fixed_costs() -> list[dict]:
-    """FIXED_COSTS="Rent:2500,Domestic help:1561,..." -> [{name, amount}, ...].
-
-    Itemized so the page can show what the fixed total is made of; change
-    rent or add a line by editing this one variable, no code change.
-    """
-    items = []
-    for entry in os.environ.get("FIXED_COSTS", "").split(","):
-        name, sep, amount = entry.rpartition(":")
-        if sep and name.strip():
-            try:
-                items.append({"name": name.strip(), "amount": float(amount)})
-            except ValueError:
-                pass  # skip a malformed entry rather than break the page
-    return items
-
-
 @app.get("/config")
 def config(request: Request):
     """Income and fixed costs come from environment variables, not code,
     so they never end up in the (public) git repo. Unset -> null, and the
     frontend simply hides the income/fixed/savings tiles."""
-    fixed_items = _env_fixed_costs()
-    fixed_total = (
-        round(sum(i["amount"] for i in fixed_items), 2)
-        if fixed_items
-        else _env_money("MONTHLY_FIXED_COSTS")  # single total, no breakdown
-    )
     with get_conn() as conn:
         categories = [r["category"] for r in conn.execute("SELECT category FROM budget_targets")]
         tax = conn.execute(
@@ -84,10 +56,7 @@ def config(request: Request):
     return {
         "user": request.state.user,  # who's logged in (None when login is off)
         "categories": categories + [ONEOFF, FIXED],
-        "monthly_net_income": _env_money("MONTHLY_NET_INCOME"),
-        "monthly_fixed_costs": fixed_total,
-        "fixed_costs": fixed_items,
-        "yearly_savings_goal": _env_money("YEARLY_SAVINGS_GOAL"),
+        **settings.plan(),  # income, fixed costs (itemized), savings goal
         "monthly_tax_setaside": tax["monthly_target"] if tax else 0,
     }
 
@@ -145,24 +114,72 @@ class MerchantRule(BaseModel):
 
 @app.post("/merchant-map")
 def add_merchant_rule(rule: MerchantRule):
-    """Teach the app a merchant. Also what the Step 3 agent will call on corrections."""
-    pattern = rule.pattern.strip().upper()
-    if not pattern:
-        raise HTTPException(400, "pattern can't be empty")
+    """Teach the app a merchant. The assistant uses the same save_rule()."""
     with get_conn() as conn:
-        valid = {r["category"] for r in conn.execute("SELECT category FROM budget_targets")}
-        valid |= {ONEOFF, FIXED}
-        if rule.category not in valid:
-            raise HTTPException(400, f"category must be one of: {sorted(valid)}")
-        conn.execute(
-            """INSERT INTO merchant_map (merchant_pattern, category, added_by)
-               VALUES (?, ?, 'user')
-               ON CONFLICT(merchant_pattern) DO UPDATE
-               SET category = excluded.category, added_by = 'user'""",
-            (pattern, rule.category),
+        try:
+            return save_rule(conn, rule.pattern, rule.category)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+
+
+# ---------- Step 3: the assistant ----------
+
+class ChatQuestion(BaseModel):
+    message: str
+
+
+def _chat_user(request: Request) -> str:
+    # Each person gets their own conversation. With login off (local dev),
+    # everyone shares one called "family".
+    return request.state.user or "family"
+
+
+@app.get("/chat")
+def chat_history(request: Request):
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT role, content, created_at FROM chat_messages WHERE user = ? ORDER BY id",
+            (_chat_user(request),),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.post("/chat")
+def chat(request: Request, question: ChatQuestion):
+    text = question.message.strip()
+    if not text:
+        raise HTTPException(400, "message can't be empty")
+    user = _chat_user(request)
+    with get_conn() as conn:
+        # Claude sees the recent conversation as plain text turns (not the old
+        # tool calls), so follow-ups like "and last month?" work.
+        history = [
+            {"role": r["role"], "content": r["content"]}
+            for r in conn.execute(
+                """SELECT role, content FROM (
+                     SELECT id, role, content FROM chat_messages WHERE user = ?
+                     ORDER BY id DESC LIMIT ?) ORDER BY id""",
+                (user, assistant.HISTORY_MESSAGES),
+            )
+        ]
+        if history and history[0]["role"] == "assistant":
+            history = history[1:]  # a conversation must start with the user
+        try:
+            result = assistant.ask(conn, history, text)
+        except assistant.AssistantUnavailable as e:
+            raise HTTPException(503, str(e))
+        conn.executemany(
+            "INSERT INTO chat_messages (user, role, content) VALUES (?, ?, ?)",
+            [(user, "user", text), (user, "assistant", result["reply"])],
         )
-        changed = recategorize(conn)
-    return {"pattern": pattern, "category": rule.category, "transactions_updated": changed}
+    return result
+
+
+@app.delete("/chat")
+def clear_chat(request: Request):
+    with get_conn() as conn:
+        conn.execute("DELETE FROM chat_messages WHERE user = ?", (_chat_user(request),))
+    return {"cleared": True}
 
 
 @app.get("/summary/{month}")

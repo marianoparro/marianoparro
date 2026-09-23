@@ -26,3 +26,7 @@ services:
         sync: false
       - key: YEARLY_SAVINGS_GOAL
         sync: false
+      - key: ANTHROPIC_API_KEY  # Step 3 assistant (console.anthropic.com)
+        sync: false
+      - key: HOUSEHOLD_NOTES    # optional: facts about the family for the assistant
+        sync: false

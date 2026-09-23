@@ -9,6 +9,7 @@ from collections import Counter
 from datetime import datetime
 
 from app.categorize import categorize, normalize_merchant
+from app.seed_data import FIXED, ONEOFF
 
 # Any single charge above this is surfaced after import (for the AI agent later).
 LARGE_CHARGE = 200
@@ -74,6 +75,30 @@ def recategorize(conn: sqlite3.Connection) -> int:
             )
             changed += 1
     return changed
+
+
+def save_rule(conn: sqlite3.Connection, pattern: str, category: str) -> dict:
+    """Store a user's merchant -> category rule and re-apply the map.
+
+    Shared by the dashboard (POST /merchant-map) and the assistant, so a
+    correction made either way behaves identically. Raises ValueError on
+    bad input.
+    """
+    pattern = pattern.strip().upper()
+    if not pattern:
+        raise ValueError("pattern can't be empty")
+    valid = {r["category"] for r in conn.execute("SELECT category FROM budget_targets")}
+    valid |= {ONEOFF, FIXED}
+    if category not in valid:
+        raise ValueError(f"category must be one of: {sorted(valid)}")
+    conn.execute(
+        """INSERT INTO merchant_map (merchant_pattern, category, added_by)
+           VALUES (?, ?, 'user')
+           ON CONFLICT(merchant_pattern) DO UPDATE
+           SET category = excluded.category, added_by = 'user'""",
+        (pattern, category),
+    )
+    return {"pattern": pattern, "category": category, "transactions_updated": recategorize(conn)}
 
 
 def import_rows(

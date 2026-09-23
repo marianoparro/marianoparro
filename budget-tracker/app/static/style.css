@@ -209,3 +209,22 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
   padding: 6px 10px; border-radius: 6px; font-size: 12px; line-height: 1.4;
   max-width: 240px;
 }
+
+/* --- Assistant chat --- */
+.chat-log { display: grid; gap: 10px; max-height: 460px; overflow-y: auto; }
+.chat-log:empty { display: none; }
+.msg { padding: 10px 12px; border-radius: 12px; max-width: 88%; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.msg.user { justify-self: end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+.msg.assistant { justify-self: start; background: var(--bg); border-bottom-left-radius: 4px; }
+.msg.assistant ul { margin: 4px 0; padding-left: 18px; }
+.msg.assistant p { margin: 0 0 6px; }
+.msg.assistant p:last-child { margin: 0; }
+.msg .meta { display: block; margin-top: 4px; font-size: 11px; color: var(--text-3); }
+.msg.thinking { color: var(--text-2); font-style: italic; }
+.msg.error { background: transparent; border: 1px solid var(--critical); color: var(--critical); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.chips button { font-weight: 500; border-radius: 999px; padding: 5px 12px; background: var(--bg); }
+.chat-form { display: flex; gap: 8px; }
+.chat-form input { flex: 1; min-width: 0; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+.chat-form button { padding: 8px 16px; }
+.link-btn { border: 0; background: none; color: var(--accent); padding: 0; font-weight: 500; }
