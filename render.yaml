@@ -1,23 +1,21 @@
 # Render "Blueprint": describes the deployment so Render can set it up from
-# this repo. Secrets are NOT here — `sync: false` makes Render ask for them
-# in its dashboard, so they never land in git.
+# this repo. Free plan: the app sleeps when unused (first open takes ~30-60s)
+# and local files are wiped on restart, so data lives in a free hosted
+# Postgres (e.g. Neon) given as DATABASE_URL. Secrets are NOT here —
+# `sync: false` makes Render ask for them, so they never land in git.
 services:
   - type: web
     name: family-budget
     runtime: python
     rootDir: budget-tracker
-    plan: starter            # a persistent disk requires a paid plan; see README
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
-    disk:                    # SQLite file lives here and survives redeploys
-      name: data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
-      - key: DB_PATH
-        value: /var/data/budget.db
+      - key: DATABASE_URL       # Neon connection string: postgresql://...
+        sync: false
       - key: APP_USERS          # "Mariano:password,Maura:password"
         sync: false
       - key: MONTHLY_NET_INCOME
@@ -26,7 +24,7 @@ services:
         sync: false
       - key: YEARLY_SAVINGS_GOAL
         sync: false
-      - key: ANTHROPIC_API_KEY  # Step 3 assistant (console.anthropic.com)
+      - key: ANTHROPIC_API_KEY  # optional, paid: only for the chat assistant
         sync: false
       - key: HOUSEHOLD_NOTES    # optional: facts about the family for the assistant
         sync: false

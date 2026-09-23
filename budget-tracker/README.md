@@ -46,47 +46,53 @@ The "Ask about your spending" card sends questions to Claude
 - **After an import**, "Ask the assistant about these" sends the flagged
   charges (one-offs and anything over $200) for a review.
 - **Cost:** roughly 1-2 cents per question.
-- Without `ANTHROPIC_API_KEY` the rest of the app works and the chat says so.
+- **Optional.** It's the only part that costs money. Without
+  `ANTHROPIC_API_KEY` the chat is simply hidden and everything else works.
 
 `HOUSEHOLD_NOTES` (optional) is free text the assistant always knows, e.g.
 who Mateo is or that Acuatic is swim lessons. Kept out of git like income.
 
-## Deploy to Render + share with the family
+## Deploy for free (Render + Neon) and share with the family
 
-`render.yaml` (repo root) describes the whole service. Everything private is
-an environment variable you type into Render, never a file in git:
+Two free services: **Render** runs the app, **Neon** stores the data
+(Render's free plan wipes files on restart, so the data can't live there).
+Free-tier terms are the providers' to change; check them when you sign up.
+Trade-off of free: the app sleeps when unused, so the first open after a
+while takes ~30-60 seconds.
+
+1. **Neon** (neon.tech): sign up → create a project → copy the connection
+   string (`postgresql://...`).
+2. **Render** (render.com): sign up with GitHub → **New → Blueprint** → this
+   repo and branch. It reads `render.yaml` and asks for:
 
 | Variable | Example | Purpose |
 |---|---|---|
+| `DATABASE_URL` | the Neon connection string | where the data lives |
 | `APP_USERS` | `Mariano:long-pass-1,Maura:long-pass-2` | who can log in |
 | `MONTHLY_NET_INCOME` | `15293` | income tile |
 | `FIXED_COSTS` | `Rent:2500,Domestic help:1561,Montessori:883,...` | fixed costs, itemized |
 | `YEARLY_SAVINGS_GOAL` | `50000` | savings vs goal |
-| `ANTHROPIC_API_KEY` | `sk-ant-...` | the assistant |
-| `HOUSEHOLD_NOTES` | `Mateo is our son; Acuatic = his swim lessons; ...` | optional, for the assistant |
+| `ANTHROPIC_API_KEY` | leave empty | **optional, paid** (~1-2¢/question): turns on the chat assistant |
+| `HOUSEHOLD_NOTES` | leave empty | optional, only used by the assistant |
 
-(`MONTHLY_FIXED_COSTS=5645` still works if you'd rather give one total with no breakdown.)
+3. **Apply** → you get an `https://….onrender.com` link. Open it, log in,
+   drag in your Chase CSVs.
+4. Send Maura the link + her password (separately). On her phone: open it,
+   log in once, then Share → **Add to Home Screen**.
 
-1. Render dashboard → **New → Blueprint** → pick this repo and branch.
-2. Fill in the variables it asks for → **Apply**. You get an `https://….onrender.com` URL.
-3. Open it, log in, drag in your Chase CSVs.
-4. Send Maura the URL + her password (separately). On her phone: open it,
-   log in once (the browser remembers), then Share → **Add to Home Screen**.
+Add a person or change a password: edit `APP_USERS` in Render (redeploys in
+about a minute). No code change.
 
-Add a person or change a password: edit `APP_USERS` in Render → it redeploys
-in about a minute. No code change.
-
-**Storage:** the SQLite file lives on a Render disk mounted at `/var/data`,
-which survives redeploys. Disks need a paid instance (the `starter` plan in
-`render.yaml`). On the free plan the file would be wiped on every redeploy
-or restart, so you'd have to re-import each time.
+(`MONTHLY_FIXED_COSTS=5645` still works if you'd rather give one total with
+no breakdown.) Locally, with no `DATABASE_URL`, the app uses a SQLite file
+(`DB_PATH`, default `./budget.db`).
 
 ## Step 1: CSV importer + database
 
 ```
 app/
   seed_data.py   budget targets + merchant→category map (edit this to re-categorize)
-  db.py          SQLite schema, connection, seeding on startup
+  db.py          schema + connection: SQLite locally, Postgres (DATABASE_URL) when deployed
   categorize.py  merchant name cleanup + pattern matching
   importer.py    Chase CSV parsing, dedup, insert
   main.py        API routes + serves the dashboard
@@ -119,7 +125,8 @@ curl "http://127.0.0.1:8000/transactions?month=2026-04"
 curl -X POST http://127.0.0.1:8000/merchant-map -H 'Content-Type: application/json' \
      -d '{"pattern": "CAFE NIDDO", "category": "Food & Dining"}'
 
-pytest   # run the tests
+pytest   # run the tests (SQLite)
+TEST_DATABASE_URL=postgresql://... pytest   # same tests on Postgres (wipes that DB)
 ```
 
 ### Rules the importer follows

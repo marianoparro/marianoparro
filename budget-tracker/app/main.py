@@ -142,7 +142,7 @@ def _chat_user(request: Request) -> str:
 def chat_history(request: Request):
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT role, content, created_at FROM chat_messages WHERE user = ? ORDER BY id",
+            'SELECT role, content, created_at FROM chat_messages WHERE "user" = ? ORDER BY id',
             (_chat_user(request),),
         ).fetchall()
     return [dict(r) for r in rows]
@@ -161,8 +161,8 @@ def chat(request: Request, question: ChatQuestion):
             {"role": r["role"], "content": r["content"]}
             for r in conn.execute(
                 """SELECT role, content FROM (
-                     SELECT id, role, content FROM chat_messages WHERE user = ?
-                     ORDER BY id DESC LIMIT ?) ORDER BY id""",
+                     SELECT id, role, content FROM chat_messages WHERE "user" = ?
+                     ORDER BY id DESC LIMIT ?) AS recent ORDER BY id""",
                 (user, assistant.HISTORY_MESSAGES),
             )
         ]
@@ -173,7 +173,7 @@ def chat(request: Request, question: ChatQuestion):
         except assistant.AssistantUnavailable as e:
             raise HTTPException(503, str(e))
         conn.executemany(
-            "INSERT INTO chat_messages (user, role, content) VALUES (?, ?, ?)",
+            'INSERT INTO chat_messages ("user", role, content) VALUES (?, ?, ?)',
             [(user, "user", text), (user, "assistant", result["reply"])],
         )
     return result
@@ -182,7 +182,7 @@ def chat(request: Request, question: ChatQuestion):
 @app.delete("/chat")
 def clear_chat(request: Request):
     with get_conn() as conn:
-        conn.execute("DELETE FROM chat_messages WHERE user = ?", (_chat_user(request),))
+        conn.execute('DELETE FROM chat_messages WHERE "user" = ?', (_chat_user(request),))
     return {"cleared": True}
 
 

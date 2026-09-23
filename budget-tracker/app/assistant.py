@@ -22,7 +22,6 @@ Settings (environment variables, never in git):
 
 import json
 import os
-import sqlite3
 from datetime import date
 
 import anthropic
@@ -48,7 +47,7 @@ def _variable_filter(alias: str = "") -> str:
     return f"{p}is_oneoff = 0 AND {p}is_fixed = 0"
 
 
-def monthly_table(conn: sqlite3.Connection) -> list[dict]:
+def monthly_table(conn) -> list[dict]:
     """Per month: variable total, per-category totals, one-offs, uncategorized."""
     months = {}
     for r in conn.execute(
@@ -186,7 +185,7 @@ def _category_clause(category: str | None, params: list) -> str:
     return " AND category = ?"
 
 
-def tool_query_transactions(conn: sqlite3.Connection, args: dict) -> dict:
+def tool_query_transactions(conn, args: dict) -> dict:
     start, end = _month_range(args)
     params: list = [start, end]
     where = "month BETWEEN ? AND ?" + _category_clause(args.get("category"), params)
@@ -224,7 +223,7 @@ def tool_query_transactions(conn: sqlite3.Connection, args: dict) -> dict:
     }
 
 
-def tool_top_merchants(conn: sqlite3.Connection, args: dict) -> dict:
+def tool_top_merchants(conn, args: dict) -> dict:
     start, end = _month_range(args)
     params: list = [start, end]
     category = args.get("category")
@@ -234,7 +233,7 @@ def tool_top_merchants(conn: sqlite3.Connection, args: dict) -> dict:
     limit = max(1, min(int(args.get("limit") or 15), 50))
     rows = conn.execute(
         f"""SELECT merchant_normalized AS merchant, COUNT(*) AS charges,
-                   ROUND(SUM(amount), 2) AS total, COALESCE(category, '{UNCATEGORIZED}') AS category
+                   ROUND(SUM(amount), 2) AS total, MAX(COALESCE(category, '{UNCATEGORIZED}')) AS category
             FROM transactions WHERE {where}
             GROUP BY merchant_normalized ORDER BY total DESC LIMIT ?""",
         params + [limit],
@@ -242,7 +241,7 @@ def tool_top_merchants(conn: sqlite3.Connection, args: dict) -> dict:
     return {"merchants": [dict(r) for r in rows]}
 
 
-def tool_set_merchant_category(conn: sqlite3.Connection, args: dict) -> dict:
+def tool_set_merchant_category(conn, args: dict) -> dict:
     return save_rule(conn, args["pattern"], args["category"])
 
 
@@ -253,14 +252,14 @@ TOOL_FUNCTIONS = {
 }
 
 
-def run_tool(conn: sqlite3.Connection, name: str, args: dict) -> tuple[str, bool]:
+def run_tool(conn, name: str, args: dict) -> tuple[str, bool]:
     """Run one tool; return (JSON text, is_error). Errors go back to Claude, not the user."""
     fn = TOOL_FUNCTIONS.get(name)
     if fn is None:
         return f"Unknown tool {name}", True
     try:
         return json.dumps(fn(conn, args)), False
-    except (ValueError, KeyError, TypeError, sqlite3.Error) as e:
+    except (ValueError, KeyError, TypeError) as e:
         return f"Error: {e}", True
 
 
@@ -286,7 +285,7 @@ How to answer:
 - Only change a merchant's category (set_merchant_category) when the user explicitly corrects one or asks you to. Tell them what you changed and how many transactions moved."""
 
 
-def build_system(conn: sqlite3.Connection) -> list[dict]:
+def build_system(conn) -> list[dict]:
     table = monthly_table(conn)
     targets = {r["category"]: r["monthly_target"] for r in conn.execute(
         "SELECT category, monthly_target FROM budget_targets")}
@@ -319,7 +318,7 @@ def _client() -> anthropic.Anthropic:
     return anthropic.Anthropic()
 
 
-def ask(conn: sqlite3.Connection, history: list[dict], question: str, client=None) -> dict:
+def ask(conn, history: list[dict], question: str, client=None) -> dict:
     """Answer one question. `history` is prior [{role, content}] text turns."""
     client = client or _client()
     model = os.environ.get("ANTHROPIC_MODEL", DEFAULT_MODEL)

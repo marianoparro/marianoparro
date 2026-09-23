@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -24,7 +26,18 @@ SAMPLE = """Transaction Date,Post Date,Description,Category,Type,Amount,Memo
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setattr("app.db.DB_PATH", str(tmp_path / "test.db"))
+    # Default: a fresh SQLite file per test. Set TEST_DATABASE_URL to run the
+    # same tests against Postgres (wiped before each test).
+    pg_url = os.environ.get("TEST_DATABASE_URL")
+    if pg_url:
+        import psycopg
+
+        with psycopg.connect(pg_url, autocommit=True) as conn:
+            conn.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+        monkeypatch.setenv("DATABASE_URL", pg_url)
+    else:
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        monkeypatch.setattr("app.db.DB_PATH", str(tmp_path / "test.db"))
     from app.main import app
 
     with TestClient(app) as c:

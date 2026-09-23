@@ -4,7 +4,6 @@ import csv
 import html
 import io
 import re
-import sqlite3
 from collections import Counter
 from datetime import datetime
 
@@ -47,14 +46,14 @@ def parse_chase_csv(text: str) -> list[dict]:
     return rows
 
 
-def load_merchant_map(conn: sqlite3.Connection) -> dict[str, str]:
+def load_merchant_map(conn) -> dict[str, str]:
     return {
         r["merchant_pattern"]: r["category"]
         for r in conn.execute("SELECT merchant_pattern, category FROM merchant_map")
     }
 
 
-def recategorize(conn: sqlite3.Connection) -> int:
+def recategorize(conn) -> int:
     """Re-run matching on every stored transaction; return how many changed.
 
     Categories are derived from merchant_map, so whenever the map changes
@@ -62,22 +61,21 @@ def recategorize(conn: sqlite3.Connection) -> int:
     old rows stuck with the old answer.
     """
     merchant_map = load_merchant_map(conn)
-    changed = 0
+    updates = []
     for r in conn.execute(
         "SELECT id, description, amount, category, is_oneoff, is_fixed FROM transactions"
     ).fetchall():
         m = categorize(r["description"], r["amount"], merchant_map)
         new = (m.category, int(m.is_oneoff), int(m.is_fixed))
         if new != (r["category"], r["is_oneoff"], r["is_fixed"]):
-            conn.execute(
-                "UPDATE transactions SET category = ?, is_oneoff = ?, is_fixed = ? WHERE id = ?",
-                (*new, r["id"]),
-            )
-            changed += 1
-    return changed
+            updates.append((*new, r["id"]))
+    conn.executemany(
+        "UPDATE transactions SET category = ?, is_oneoff = ?, is_fixed = ? WHERE id = ?", updates
+    )
+    return len(updates)
 
 
-def save_rule(conn: sqlite3.Connection, pattern: str, category: str) -> dict:
+def save_rule(conn, pattern: str, category: str) -> dict:
     """Store a user's merchant -> category rule and re-apply the map.
 
     Shared by the dashboard (POST /merchant-map) and the assistant, so a
@@ -102,7 +100,7 @@ def save_rule(conn: sqlite3.Connection, pattern: str, category: str) -> dict:
 
 
 def import_rows(
-    conn: sqlite3.Connection, rows: list[dict], card_last4: str | None
+    conn, rows: list[dict], card_last4: str | None
 ) -> dict:
     merchant_map = load_merchant_map(conn)
 
@@ -111,14 +109,19 @@ def import_rows(
     # count: if this file has 3 copies of a (date, description, amount) and
     # the DB already has 1, we insert 2. Re-importing a file inserts 0.
     in_file = Counter((r["date"], r["description"], r["amount"]) for r in rows)
-    to_insert: Counter = Counter()
-    for key, n in in_file.items():
-        (already,) = conn.execute(
-            """SELECT COUNT(*) FROM transactions
-               WHERE date = ? AND description = ? AND amount = ? AND card_last4 IS ?""",
-            (*key, card_last4),
-        ).fetchone()
-        to_insert[key] = max(0, n - already)
+    # One query for what's already stored in this file's date range (not one
+    # per row: with a hosted database each query is a network round trip).
+    in_db: Counter = Counter()
+    if rows:
+        for r in conn.execute(
+            """SELECT date, description, amount, COUNT(*) AS n FROM transactions
+               WHERE date BETWEEN ? AND ? AND card_last4 IS NOT DISTINCT FROM ?
+               GROUP BY date, description, amount""",
+            (min(r["date"] for r in rows), max(r["date"] for r in rows), card_last4),
+        ):
+            in_db[(r["date"], r["description"], round(r["amount"], 2))] = r["n"]
+    to_insert = Counter({key: max(0, n - in_db[key]) for key, n in in_file.items()})
+    new_rows = []
 
     result = {"imported": 0, "duplicates": 0, "uncategorized": 0, "oneoffs": 0, "flagged": []}
     for r in rows:
@@ -129,17 +132,11 @@ def import_rows(
         to_insert[key] -= 1
 
         match = categorize(r["description"], r["amount"], merchant_map)
-        conn.execute(
-            """INSERT INTO transactions
-               (date, description, amount, category, merchant_normalized,
-                card_last4, is_oneoff, is_fixed, month)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                r["date"], r["description"], r["amount"], match.category,
-                normalize_merchant(r["description"]), card_last4,
-                int(match.is_oneoff), int(match.is_fixed), r["month"],
-            ),
-        )
+        new_rows.append((
+            r["date"], r["description"], r["amount"], match.category,
+            normalize_merchant(r["description"]), card_last4,
+            int(match.is_oneoff), int(match.is_fixed), r["month"],
+        ))
         result["imported"] += 1
         result["uncategorized"] += match.category is None
         result["oneoffs"] += match.is_oneoff
@@ -155,4 +152,11 @@ def import_rows(
                     "reason": "one-off" if match.is_oneoff else f"over ${LARGE_CHARGE}",
                 }
             )
+    conn.executemany(
+        """INSERT INTO transactions
+           (date, description, amount, category, merchant_normalized,
+            card_last4, is_oneoff, is_fixed, month)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        new_rows,
+    )
     return result
