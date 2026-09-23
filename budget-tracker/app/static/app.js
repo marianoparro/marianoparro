@@ -59,7 +59,7 @@ const hideTip = () => { tip.hidden = true; };
 async function init() {
   [state.config, state.months] = await Promise.all([api("/config"), api("/months")]);
   if (state.config.user) $("#who").textContent = `Hi, ${state.config.user}`;
-  loadChat();
+  if (state.config.assistant_enabled) { $("#ask").hidden = false; loadChat(); }
   if (!state.months.length) {
     $("#tiles").innerHTML = `<div class="tile"><div class="label">No data yet</div><div class="sub">Import a Chase CSV below to get started.</div></div>`;
     renderFilterOptions();
@@ -430,7 +430,7 @@ async function importFiles(files) {
       <p><b>${r.imported}</b> imported · ${r.duplicates} duplicates skipped · ${r.uncategorized} uncategorized · ${r.oneoffs} one-offs</p>
       ${flagged.length ? `<p class="muted">Worth a look: one-offs and single charges over $200</p>
       <ul class="plain-list">${flagged.map((f) => `<li><span class="desc">${esc(f.description)}<span class="date">${shortDate(f.date)} · ${esc(f.category || "Uncategorized")} · ${esc(f.reason)}</span></span><b>${usd2.format(f.amount)}</b></li>`).join("")}</ul>
-      <button class="primary" id="ask-flagged" type="button">Ask the assistant about these</button>` : ""}`;
+      ${state.config.assistant_enabled ? `<button class="primary" id="ask-flagged" type="button">Ask the assistant about these</button>` : ""}` : ""}`;
     const askFlagged = $("#ask-flagged");
     if (askFlagged) askFlagged.onclick = () => {
       const list = flagged.map((f) => `${f.date} ${f.description} $${f.amount}`).join("; ");

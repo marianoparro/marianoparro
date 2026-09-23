@@ -115,3 +115,10 @@ def test_rolling_average_skips_partial_months():
     avg = assistant.rolling_averages(table)
     assert avg["months"] == ["2026-02", "2026-03"]
     assert avg["variable_total"] == 450
+
+
+def test_chat_hidden_without_key(client, monkeypatch):  # noqa: F811
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert client.get("/config").json()["assistant_enabled"] is False
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    assert client.get("/config").json()["assistant_enabled"] is True

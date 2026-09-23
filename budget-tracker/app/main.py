@@ -2,6 +2,7 @@
 Then open http://127.0.0.1:8000/docs for a clickable API explorer.
 """
 
+import os
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -55,6 +56,9 @@ def config(request: Request):
         ).fetchone()
     return {
         "user": request.state.user,  # who's logged in (None when login is off)
+        # The chat is optional (it's the only part that costs money): the page
+        # hides it entirely when no API key is set.
+        "assistant_enabled": bool(os.environ.get("ANTHROPIC_API_KEY")),
         "categories": categories + [ONEOFF, FIXED],
         **settings.plan(),  # income, fixed costs (itemized), savings goal
         "monthly_tax_setaside": tax["monthly_target"] if tax else 0,
