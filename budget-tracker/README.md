@@ -26,6 +26,32 @@ export MONTHLY_NET_INCOME=...   MONTHLY_FIXED_COSTS=...   YEARLY_SAVINGS_GOAL=..
 
 Saved = income − fixed costs − variable spend − tax set-aside − one-offs.
 
+## Deploy to Render + share with the family
+
+`render.yaml` (repo root) describes the whole service. Everything private is
+an environment variable you type into Render, never a file in git:
+
+| Variable | Example | Purpose |
+|---|---|---|
+| `APP_USERS` | `Mariano:long-pass-1,Maura:long-pass-2` | who can log in |
+| `MONTHLY_NET_INCOME` | `15293` | savings tile |
+| `MONTHLY_FIXED_COSTS` | `5645` | savings tile |
+| `YEARLY_SAVINGS_GOAL` | `50000` | savings tile |
+
+1. Render dashboard → **New → Blueprint** → pick this repo and branch.
+2. Fill in the variables it asks for → **Apply**. You get an `https://….onrender.com` URL.
+3. Open it, log in, drag in your Chase CSVs.
+4. Send Maura the URL + her password (separately). On her phone: open it,
+   log in once (the browser remembers), then Share → **Add to Home Screen**.
+
+Add a person or change a password: edit `APP_USERS` in Render → it redeploys
+in about a minute. No code change.
+
+**Storage:** the SQLite file lives on a Render disk mounted at `/var/data`,
+which survives redeploys. Disks need a paid instance (the `starter` plan in
+`render.yaml`). On the free plan the file would be wiped on every redeploy
+or restart, so you'd have to re-import each time.
+
 ## Step 1: CSV importer + database
 
 ```
@@ -35,6 +61,7 @@ app/
   categorize.py  merchant name cleanup + pattern matching
   importer.py    Chase CSV parsing, dedup, insert
   main.py        API routes + serves the dashboard
+  auth.py        family login (APP_USERS env var)
   static/        the dashboard: index.html, style.css, app.js
 tests/           pytest, synthetic data only
 ```

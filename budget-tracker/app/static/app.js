@@ -58,6 +58,7 @@ const hideTip = () => { tip.hidden = true; };
 // ---------- loading ----------
 async function init() {
   [state.config, state.months] = await Promise.all([api("/config"), api("/months")]);
+  if (state.config.user) $("#who").textContent = `Hi, ${state.config.user}`;
   if (!state.months.length) {
     $("#tiles").innerHTML = `<div class="tile"><div class="label">No data yet</div><div class="sub">Import a Chase CSV below to get started.</div></div>`;
     renderFilterOptions();

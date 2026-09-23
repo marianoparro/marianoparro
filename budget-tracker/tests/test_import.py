@@ -147,3 +147,17 @@ def test_config_reads_income_from_env(client, monkeypatch):
     assert "Food & Dining" in cfg["categories"] and "One-off" in cfg["categories"]
     monkeypatch.setenv("MONTHLY_NET_INCOME", "1000")
     assert client.get("/config").json()["monthly_net_income"] == 1000.0
+
+
+def test_login_required_when_users_configured(client, monkeypatch):
+    monkeypatch.setenv("APP_USERS", "Mariano:pw-one, Maura:pw-two")
+    assert client.get("/").status_code == 401
+    assert client.get("/docs").status_code == 401
+    assert client.get("/", auth=("maura", "wrong")).status_code == 401
+    r = client.get("/config", auth=("maura", "pw-two"))  # name is case-insensitive
+    assert r.status_code == 200 and r.json()["user"] == "Maura"
+    assert client.get("/config", auth=("Mariano", "pw-one")).json()["user"] == "Mariano"
+
+
+def test_open_without_app_users(client):
+    assert client.get("/config").json()["user"] is None

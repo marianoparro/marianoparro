@@ -63,6 +63,10 @@ a { color: var(--accent); }
   padding: 14px 16px; background: var(--surface); border-bottom: 1px solid var(--border);
   position: sticky; top: 0; z-index: 5;
 }
+.brand { display: flex; flex-direction: column; min-width: 0; }
+.brand h1 { white-space: nowrap; }
+.brand .who { margin: 0; font-size: 12px; }
+.brand .who:empty { display: none; }
 select, input[type="search"] {
   font: inherit; color: var(--text); background: var(--surface);
   border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px;

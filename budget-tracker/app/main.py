@@ -7,11 +7,12 @@ import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from app.auth import require_login
 from app.db import get_conn, init_db
 from app.importer import card_from_filename, import_rows, parse_chase_csv, recategorize
 from app.seed_data import FIXED, ONEOFF
@@ -31,6 +32,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Family Budget Tracker", lifespan=lifespan)
+app.middleware("http")(require_login)  # login wall in front of everything
 
 STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -47,7 +49,7 @@ def _env_money(name: str) -> float | None:
 
 
 @app.get("/config")
-def config():
+def config(request: Request):
     """Income and fixed costs come from environment variables, not code,
     so they never end up in the (public) git repo. Unset -> null, and the
     frontend simply hides the savings tile."""
@@ -57,6 +59,7 @@ def config():
             "SELECT monthly_target FROM budget_targets WHERE category = 'Taxes'"
         ).fetchone()
     return {
+        "user": request.state.user,  # who's logged in (None when login is off)
         "categories": categories + [ONEOFF, FIXED],
         "monthly_net_income": _env_money("MONTHLY_NET_INCOME"),
         "monthly_fixed_costs": _env_money("MONTHLY_FIXED_COSTS"),
