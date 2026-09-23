@@ -8,8 +8,11 @@ HTML/JS frontend and a Claude-powered assistant coming in later steps.
 Start the server (below) and open http://127.0.0.1:8000. One page, plain
 HTML/CSS/JS in `app/static/` (no build step):
 
-- **Tiles:** variable spend vs target, one-offs, uncategorized, and savings
-  vs the $50k/yr goal
+- **Tiles, in money-flow order:** income − fixed − variable − one-offs =
+  saved, each with its yearly figure underneath
+- **Where the money goes:** the same flow line by line, fixed costs itemized,
+  month and per-year columns. Per year = month × 12, except one-offs, which
+  use what was actually paid this year (one movers bill isn't twelve).
 - **Trend chart:** monthly variable spend vs target; hover for detail, click
   a bar to open that month. Striped bars with `*` are partial months.
 - **By category:** spent (bar) vs target (tick); click a row to filter
@@ -21,7 +24,7 @@ The savings tile needs income and fixed costs. These are read from
 environment variables so they never land in git:
 
 ```bash
-export MONTHLY_NET_INCOME=...   MONTHLY_FIXED_COSTS=...   YEARLY_SAVINGS_GOAL=...
+export MONTHLY_NET_INCOME=...  FIXED_COSTS="Rent:2500,..."  YEARLY_SAVINGS_GOAL=...
 ```
 
 Saved = income − fixed costs − variable spend − tax set-aside − one-offs.
@@ -34,9 +37,11 @@ an environment variable you type into Render, never a file in git:
 | Variable | Example | Purpose |
 |---|---|---|
 | `APP_USERS` | `Mariano:long-pass-1,Maura:long-pass-2` | who can log in |
-| `MONTHLY_NET_INCOME` | `15293` | savings tile |
-| `MONTHLY_FIXED_COSTS` | `5645` | savings tile |
-| `YEARLY_SAVINGS_GOAL` | `50000` | savings tile |
+| `MONTHLY_NET_INCOME` | `15293` | income tile |
+| `FIXED_COSTS` | `Rent:2500,Domestic help:1561,Montessori:883,...` | fixed costs, itemized |
+| `YEARLY_SAVINGS_GOAL` | `50000` | savings vs goal |
+
+(`MONTHLY_FIXED_COSTS=5645` still works if you'd rather give one total with no breakdown.)
 
 1. Render dashboard → **New → Blueprint** → pick this repo and branch.
 2. Fill in the variables it asks for → **Apply**. You get an `https://….onrender.com` URL.

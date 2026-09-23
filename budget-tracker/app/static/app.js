@@ -111,50 +111,109 @@ function partialNote(month) {
   return "";
 }
 
+// Top row reads as the money flow, left to right:
+//   Income − Fixed − Variable − One-offs (− tax set-aside) = Saved
+// Each big monthly number has its yearly equivalent in small text underneath.
 function renderTiles() {
   const s = state.summary;
   const c = state.config;
+  const hasPlan = c.monthly_net_income != null && c.monthly_fixed_costs != null;
   const variance = s.variable_target ? ((s.variable_total - s.variable_target) / s.variable_target) * 100 : null;
   const uncatCount = state.txs.filter((t) => !t.category).length;
   const note = partialNote(s.month);
-  const partial = note ? `<div class="sub">Month ${note}</div>` : "";
+  const year = s.month.slice(0, 4);
+  const oneoffsYtd = oneoffsYearToDate();
 
-  const tiles = [
-    `<div class="tile">
-       <div class="label">Variable spend (Chase)</div>
-       <div class="value">${money(s.variable_total)}</div>
-       <div class="sub">of ${money(s.variable_target)} target · ${badge(variance)}</div>
-       ${partial}
-     </div>`,
-    `<div class="tile">
-       <div class="label">One-offs</div>
-       <div class="value">${money(s.oneoff_total)}</div>
-       <div class="sub">${s.oneoffs.length} charge${s.oneoffs.length === 1 ? "" : "s"}, not in averages</div>
-     </div>`,
-    `<div class="tile">
-       <div class="label">Uncategorized</div>
-       <div class="value">${money(s.uncategorized_total)}</div>
-       <div class="sub">${uncatCount} transaction${uncatCount === 1 ? "" : "s"} · <a href="#" id="fix-uncat">categorize</a></div>
-     </div>`,
-  ];
+  const tile = (label, value, yearly, sub = "") => `<div class="tile">
+      <div class="label">${label}</div>
+      <div class="value">${value}</div>
+      <div class="yearly">${yearly}</div>
+      ${sub ? `<div class="sub">${sub}</div>` : ""}
+    </div>`;
 
-  // Savings only shows when income + fixed costs are configured (env vars).
-  if (c.monthly_net_income != null && c.monthly_fixed_costs != null) {
-    // Same math as the plan: income − fixed − card spend − tax set-aside − one-offs.
-    const saved = c.monthly_net_income - c.monthly_fixed_costs - s.variable_total - c.monthly_tax_setaside - s.oneoff_total;
-    const goal = c.yearly_savings_goal ? c.yearly_savings_goal / 12 : null;
-    const status = goal == null ? "" : saved >= goal
-      ? `<span class="badge good">✓ on pace</span>`
-      : `<span class="badge ${saved >= 0 ? "warning" : "critical"}">▼ ${money(goal - saved)} short</span>`;
-    tiles.push(
-      `<div class="tile">
-         <div class="label">Saved this month</div>
-         <div class="value">${money(saved)}</div>
-         <div class="sub">${goal != null ? `goal ${money(goal)}/mo · ${status}` : "after fixed costs, tax set-aside & one-offs"}</div>
-       </div>`);
+  const tiles = [];
+  if (hasPlan) {
+    tiles.push(tile("Income (net)", money(c.monthly_net_income), `${money(c.monthly_net_income * 12)} / year`));
+    tiles.push(tile("Fixed costs", money(c.monthly_fixed_costs), `${money(c.monthly_fixed_costs * 12)} / year`,
+      c.fixed_costs.length ? `${c.fixed_costs.length} items · <a href="#flow" id="see-fixed">see breakdown</a>` : ""));
+  }
+  tiles.push(tile("Variable spend (card)", money(s.variable_total),
+    `≈ ${money(s.variable_total * 12)} / year at this pace`,
+    `target ${money(s.variable_target)} · ${badge(variance)}` +
+    (uncatCount ? `<br>incl. ${money(s.uncategorized_total)} uncategorized · <a href="#" id="fix-uncat">categorize</a>` : "") +
+    (note ? `<br>Month ${note}` : "")));
+  tiles.push(tile("One-offs", money(s.oneoff_total),
+    `${money(oneoffsYtd)} so far in ${year}`,
+    `${s.oneoffs.length} charge${s.oneoffs.length === 1 ? "" : "s"}, not in averages`));
+  if (hasPlan) {
+    const saved = savedThisMonth();
+    const goal = c.yearly_savings_goal;
+    const perYear = savedPerYear();
+    const status = goal == null ? "" : perYear >= goal
+      ? `<span class="badge good">✓ on pace for ${money(goal)}</span>`
+      : `<span class="badge ${perYear >= 0 ? "warning" : "critical"}">▼ ${money(goal - perYear)} short of ${money(goal)}</span>`;
+    tiles.push(tile("Saved this month", money(saved), `≈ ${money(savedPerYear())} / year at this pace`, status));
   }
   $("#tiles").innerHTML = tiles.join("");
-  $("#fix-uncat").onclick = (e) => { e.preventDefault(); setFilter("__uncat"); $("#tx-table").scrollIntoView({ behavior: "smooth" }); };
+  $("#tiles").classList.toggle("five", tiles.length === 5);
+  const fix = $("#fix-uncat");
+  if (fix) fix.onclick = (e) => { e.preventDefault(); setFilter("__uncat"); $("#tx-table").scrollIntoView({ behavior: "smooth" }); };
+  const seeFixed = $("#see-fixed");
+  if (seeFixed) seeFixed.onclick = (e) => { e.preventDefault(); $("#fixed-details").open = true; $("#flow").scrollIntoView({ behavior: "smooth" }); };
+  renderFlow();
+}
+
+// Same math as the plan: income − fixed − card spend − tax set-aside − one-offs.
+function savedThisMonth() {
+  const s = state.summary, c = state.config;
+  return regularLeftOver() - s.oneoff_total;
+}
+
+// What's left after the items that repeat every month.
+function regularLeftOver() {
+  const s = state.summary, c = state.config;
+  return c.monthly_net_income - c.monthly_fixed_costs - s.variable_total - c.monthly_tax_setaside;
+}
+
+// One-offs don't repeat, so multiplying them by 12 would mislead (one movers
+// bill would count as twelve). Use what was actually paid this year so far.
+function oneoffsYearToDate() {
+  const month = state.summary.month, year = month.slice(0, 4);
+  return state.months
+    .filter((m) => m.month.startsWith(year) && m.month <= month)
+    .reduce((sum, m) => sum + m.oneoff_total, 0);
+}
+
+// Yearly pace: regular items × 12, minus the one-offs actually paid this year.
+function savedPerYear() {
+  return regularLeftOver() * 12 - oneoffsYearToDate();
+}
+
+// "Where the money goes": the same flow as the tiles, one line per step, with
+// fixed costs itemized (rent, school, ...) and a per-year column.
+function renderFlow() {
+  const c = state.config, s = state.summary;
+  const card = $("#flow");
+  if (c.monthly_net_income == null || c.monthly_fixed_costs == null) { card.hidden = true; return; }
+  card.hidden = false;
+  // Deductions are shown as positive amounts; the "−" is in the label.
+  const row = (label, month, year, cls = "") =>
+    `<div class="flow-row ${cls}"><span>${label}</span><span class="num">${money(month)}</span><span class="num yr">${money(year)}</span></div>`;
+  const wasOpen = $("#fixed-details")?.open;
+  const fixedItems = c.fixed_costs.map((i) =>
+    `<div class="flow-row item"><span>${esc(i.name)}</span><span class="num">${money(i.amount)}</span><span class="num yr">${money(i.amount * 12)}</span></div>`).join("");
+  const fixedRow = row("− Fixed costs", c.monthly_fixed_costs, c.monthly_fixed_costs * 12);
+  $("#flow-body").innerHTML = `
+    <div class="flow-row head"><span></span><span class="num">${monthName(s.month)}</span><span class="num yr">Per year</span></div>
+    ${row("Income (net)", c.monthly_net_income, c.monthly_net_income * 12, "strong")}
+    ${c.fixed_costs.length
+      ? `<details id="fixed-details" ${wasOpen ? "open" : ""}><summary>${fixedRow}</summary>${fixedItems}</details>`
+      : fixedRow}
+    ${row("− Variable spend (card)", s.variable_total, s.variable_total * 12)}
+    ${row("− Tax set-aside", c.monthly_tax_setaside, c.monthly_tax_setaside * 12)}
+    ${row(`− One-offs <span class="hint">year = paid so far in ${s.month.slice(0, 4)}</span>`, s.oneoff_total, oneoffsYearToDate())}
+    ${row("= Saved", savedThisMonth(), savedPerYear(), "total")}
+    ${c.yearly_savings_goal ? row("Goal", c.yearly_savings_goal / 12, c.yearly_savings_goal, "goal") : ""}`;
 }
 
 // ---------- trend chart (hand-built SVG) ----------

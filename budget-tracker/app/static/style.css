@@ -86,7 +86,33 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px; display: grid; gap: 16p
 .tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
 .tile .label { color: var(--text-2); font-size: 13px; }
 .tile .value { font-size: 26px; font-weight: 650; margin: 2px 0; }
-.tile .sub { color: var(--text-2); font-size: 13px; }
+.tile .yearly { color: var(--text-2); font-size: 13px; font-weight: 600; }
+.tile .sub { color: var(--text-2); font-size: 12px; margin-top: 6px; }
+@media (min-width: 1000px) { .tiles.five { grid-template-columns: repeat(5, 1fr); } }
+/* Phone: two tiles per row; the last one (Saved) spans both when odd */
+@media (max-width: 600px) {
+  .tiles { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tile { padding: 12px; }
+  .tile .value { font-size: 22px; }
+  .tile .yearly { font-size: 12px; }
+  .tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
+
+/* --- Where the money goes --- */
+.flow-row { display: grid; grid-template-columns: 1fr 100px 110px; gap: 8px; padding: 7px 4px; border-bottom: 1px solid var(--grid); }
+.flow-row .num { text-align: right; }
+.flow-row .yr { color: var(--text-2); }
+.flow-row.head { color: var(--text-3); font-size: 12px; border-bottom: 0; padding-bottom: 2px; }
+.flow-row.strong { font-weight: 600; }
+.flow-row.item { padding-left: 24px; font-size: 13px; color: var(--text-2); }
+.flow-row.total { font-weight: 700; font-size: 16px; border-top: 2px solid var(--text); border-bottom: 0; }
+.flow-row .hint { display: block; font-size: 11px; color: var(--text-3); }
+.flow-row.goal { color: var(--text-2); font-size: 13px; border-bottom: 0; }
+details > summary { list-style: none; cursor: pointer; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary .flow-row > span:first-child::after { content: " ▸"; color: var(--text-3); }
+details[open] > summary .flow-row > span:first-child::after { content: " ▾"; }
+@media (max-width: 600px) { .flow-row { grid-template-columns: 1fr 80px 90px; font-size: 14px; } }
 
 /* status badge: icon + words, never color alone */
 .badge { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; font-weight: 600; white-space: nowrap; }

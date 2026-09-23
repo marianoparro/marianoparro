@@ -22,7 +22,7 @@ services:
         sync: false
       - key: MONTHLY_NET_INCOME
         sync: false
-      - key: MONTHLY_FIXED_COSTS
+      - key: FIXED_COSTS        # "Rent:2500,Domestic help:1561,..."
         sync: false
       - key: YEARLY_SAVINGS_GOAL
         sync: false

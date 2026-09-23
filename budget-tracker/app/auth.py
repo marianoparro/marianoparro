@@ -23,6 +23,15 @@ from fastapi.responses import Response
 
 REALM = "Family Budget"
 
+# Phones fetch the home-screen icon without the login, so these few
+# non-sensitive files stay public. Everything else needs a login.
+PUBLIC_PATHS = {
+    "/static/manifest.webmanifest",
+    "/static/icon.svg",
+    "/static/icon-180.png",
+    "/static/icon-512.png",
+}
+
 
 def load_users() -> dict[str, tuple[str, str]]:
     """{lowercase name: (display name, password)} from APP_USERS."""
@@ -53,7 +62,7 @@ def check(header: str | None, users: dict[str, tuple[str, str]]) -> str | None:
 async def require_login(request: Request, call_next):
     """FastAPI middleware: runs before every request, including /docs."""
     users = load_users()
-    if not users:
+    if not users or request.url.path in PUBLIC_PATHS:
         request.state.user = None
         return await call_next(request)
     user = check(request.headers.get("Authorization"), users)

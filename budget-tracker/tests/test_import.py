@@ -161,3 +161,22 @@ def test_login_required_when_users_configured(client, monkeypatch):
 
 def test_open_without_app_users(client):
     assert client.get("/config").json()["user"] is None
+
+
+def test_fixed_costs_itemized_from_env(client, monkeypatch):
+    monkeypatch.setenv("FIXED_COSTS", "Rent:2500, Domestic help:1561,Internet (Totalplay):61,bad")
+    cfg = client.get("/config").json()
+    assert cfg["fixed_costs"] == [
+        {"name": "Rent", "amount": 2500.0},
+        {"name": "Domestic help", "amount": 1561.0},
+        {"name": "Internet (Totalplay)", "amount": 61.0},
+    ]
+    assert cfg["monthly_fixed_costs"] == 4122.0
+
+
+def test_icon_public_but_data_private(client, monkeypatch):
+    monkeypatch.setenv("APP_USERS", "Maura:pw")
+    assert client.get("/static/icon-180.png").status_code == 200
+    assert client.get("/static/manifest.webmanifest").status_code == 200
+    assert client.get("/static/app.js").status_code == 401
+    assert client.get("/months").status_code == 401

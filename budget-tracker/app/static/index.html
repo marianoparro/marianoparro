@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Family Budget</title>
   <link rel="stylesheet" href="/static/style.css">
+  <!-- Home-screen icon + name when saved to a phone -->
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/icon-180.png">
+  <meta name="apple-mobile-web-app-title" content="Budget">
+  <meta name="theme-color" content="#2a78d6">
 </head>
 <body>
   <header class="topbar">
@@ -21,6 +27,15 @@
   <main>
     <!-- Headline numbers for the selected month -->
     <section class="tiles" id="tiles" aria-live="polite"></section>
+
+    <!-- Income down to savings, with fixed costs itemized -->
+    <section class="card" id="flow" hidden>
+      <div class="card-head">
+        <h2>Where the money goes</h2>
+        <p class="muted">Tap fixed costs to see each item · per year = this month × 12, except one-offs</p>
+      </div>
+      <div id="flow-body"></div>
+    </section>
 
     <!-- Variable spend per month vs target; click a bar to open that month -->
     <section class="card">
