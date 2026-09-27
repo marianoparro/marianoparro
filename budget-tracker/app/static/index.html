@@ -2,22 +2,53 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Family Budget</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
   <!-- Home-screen icon + name when saved to a phone -->
   <link rel="manifest" href="/static/manifest.webmanifest">
   <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/icon-180.png">
   <meta name="apple-mobile-web-app-title" content="Budget">
-  <meta name="theme-color" content="#2a78d6">
+  <meta name="theme-color" content="#f4f5f7">
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <h1>Family Budget</h1>
-      <span class="who muted" id="who"></span>
+      <img src="/static/icon.svg" alt="" class="logo">
+      <div>
+        <h1>Family Budget</h1>
+        <span class="who" id="who"></span>
+      </div>
     </div>
+
+    <!-- Tabs: in the header on wide screens, a bottom bar on phones -->
+    <nav class="tabs" id="tabs" aria-label="Sections">
+      <button type="button" data-tab="overview">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>
+        <span>Overview</span>
+      </button>
+      <button type="button" data-tab="categories">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+        <span>Categories</span>
+      </button>
+      <button type="button" data-tab="transactions">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+        <span>Transactions</span>
+      </button>
+      <button type="button" data-tab="ask" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>
+        <span>Ask</span>
+      </button>
+      <button type="button" data-tab="import">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+        <span>Import</span>
+      </button>
+    </nav>
+
     <label class="month-picker">
       <span class="sr-only">Month</span>
       <select id="month-select" aria-label="Month"></select>
@@ -25,93 +56,107 @@
   </header>
 
   <main>
-    <!-- Headline numbers for the selected month -->
-    <section class="tiles" id="tiles" aria-live="polite"></section>
+    <!-- ============ Overview ============ -->
+    <div class="view" data-view="overview">
+      <!-- Headline: saved this month + the flow that produced it -->
+      <section class="hero" id="hero" aria-live="polite"></section>
 
-    <!-- Income down to savings, with fixed costs itemized -->
-    <section class="card" id="flow" hidden>
-      <div class="card-head">
-        <h2>Where the money goes</h2>
-        <p class="muted">Tap fixed costs to see each item · per year = this month × 12, except one-offs</p>
-      </div>
-      <div id="flow-body"></div>
-    </section>
-
-    <!-- Step 3: ask questions in plain language -->
-    <section class="card" id="ask" hidden>
-      <div class="card-head">
-        <h2>Ask about your spending</h2>
-        <button class="link-btn" id="chat-clear" hidden>New conversation</button>
-      </div>
-      <div class="chat-log" id="chat-log" aria-live="polite"></div>
-      <div class="chips" id="chat-chips"></div>
-      <form class="chat-form" id="chat-form">
-        <input id="chat-input" type="text" autocomplete="off" placeholder="e.g. Why is food so high this month?" aria-label="Your question">
-        <button class="primary" type="submit">Ask</button>
-      </form>
-    </section>
-
-    <!-- Variable spend per month vs target; click a bar to open that month -->
-    <section class="card">
-      <div class="card-head">
-        <h2>Monthly variable spend</h2>
-        <p class="muted" id="trend-note"></p>
-      </div>
-      <div class="chart" id="trend-chart"></div>
-    </section>
-
-    <div class="two-col">
-      <!-- Actual vs target per category -->
-      <section class="card">
+      <!-- Income down to savings, with fixed costs itemized -->
+      <section class="card" id="flow" hidden>
         <div class="card-head">
-          <h2>By category</h2>
-          <p class="muted">Bar = spent · tick = target · click a row to filter transactions</p>
+          <h2>Where the money goes</h2>
+          <p class="muted">Tap fixed costs for each item · per year = month × 12, except one-offs</p>
         </div>
-        <ul class="cat-list" id="categories"></ul>
+        <div id="flow-body"></div>
       </section>
 
-      <!-- One-offs: kept out of the averages, but always listed -->
+      <!-- Variable spend per month vs target; click a bar to open that month -->
       <section class="card">
         <div class="card-head">
-          <h2>One-offs this month</h2>
-          <p class="muted">Recorded, but excluded from the averages</p>
+          <h2>Monthly variable spend</h2>
+          <p class="muted" id="trend-note"></p>
         </div>
-        <ul class="plain-list" id="oneoffs"></ul>
+        <div class="chart" id="trend-chart"></div>
       </section>
     </div>
 
-    <!-- Every transaction; change a category to teach the app -->
-    <section class="card">
-      <div class="card-head">
-        <h2>Transactions</h2>
-        <div class="filters">
-          <select id="cat-filter" aria-label="Filter by category"></select>
-          <input id="search" type="search" placeholder="Search description" aria-label="Search">
-        </div>
-      </div>
-      <div class="table-wrap">
-        <table id="tx-table">
-          <thead>
-            <tr><th>Date</th><th>Description</th><th class="num">Amount</th><th>Category</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <p class="muted" id="tx-count"></p>
-    </section>
+    <!-- ============ Categories ============ -->
+    <div class="view" data-view="categories" hidden>
+      <div class="two-col">
+        <section class="card">
+          <div class="card-head">
+            <h2>By category</h2>
+            <p class="muted">Bar = spent · line = target · tap a row to see its transactions</p>
+          </div>
+          <ul class="cat-list" id="categories"></ul>
+        </section>
 
-    <!-- Import Chase CSVs -->
-    <section class="card">
-      <div class="card-head">
-        <h2>Import Chase CSVs</h2>
-        <p class="muted">Re-importing is safe: duplicates are skipped</p>
+        <!-- One-offs: kept out of the averages, but always listed -->
+        <section class="card">
+          <div class="card-head">
+            <h2>One-offs this month</h2>
+            <p class="muted">Recorded, but excluded from the averages</p>
+          </div>
+          <ul class="plain-list" id="oneoffs"></ul>
+        </section>
       </div>
-      <label class="dropzone" id="dropzone">
-        <input type="file" id="file-input" accept=".csv,.CSV" multiple>
-        <span>Drop CSV files here or <u>choose files</u></span>
-      </label>
-      <div id="import-result"></div>
-    </section>
+    </div>
+
+    <!-- ============ Transactions ============ -->
+    <div class="view" data-view="transactions" hidden>
+      <section class="card">
+        <div class="card-head">
+          <h2>Transactions</h2>
+          <div class="filters">
+            <select id="cat-filter" aria-label="Filter by category"></select>
+            <input id="search" type="search" placeholder="Search" aria-label="Search">
+          </div>
+        </div>
+        <p class="muted hint-line">Change a category to fix that merchant in every month.</p>
+        <div class="table-wrap">
+          <table id="tx-table">
+            <thead>
+              <tr><th>Date</th><th>Description</th><th class="num">Amount</th><th>Category</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="muted" id="tx-count"></p>
+      </section>
+    </div>
+
+    <!-- ============ Ask (only when the assistant is configured) ============ -->
+    <div class="view" data-view="ask" hidden>
+      <section class="card" id="ask">
+        <div class="card-head">
+          <h2>Ask about your spending</h2>
+          <button class="link-btn" id="chat-clear" hidden>New conversation</button>
+        </div>
+        <div class="chat-log" id="chat-log" aria-live="polite"></div>
+        <div class="chips" id="chat-chips"></div>
+        <form class="chat-form" id="chat-form">
+          <input id="chat-input" type="text" autocomplete="off" placeholder="e.g. Why is food so high this month?" aria-label="Your question">
+          <button class="primary" type="submit">Ask</button>
+        </form>
+      </section>
+    </div>
+
+    <!-- ============ Import ============ -->
+    <div class="view" data-view="import" hidden>
+      <section class="card">
+        <div class="card-head">
+          <h2>Import Chase CSVs</h2>
+          <p class="muted">Re-importing is safe: duplicates are skipped</p>
+        </div>
+        <label class="dropzone" id="dropzone">
+          <input type="file" id="file-input" accept=".csv,.CSV" multiple>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+          <span><b>Choose files</b> or drop them here</span>
+          <small>On chase.com: your card → Activity → Download (CSV)</small>
+        </label>
+        <div id="import-result"></div>
+      </section>
+    </div>
   </main>
 
   <div class="tooltip" id="tooltip" role="status" hidden></div>

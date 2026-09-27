@@ -10,6 +10,7 @@ const state = {
   txs: [],          // GET /transactions?month=
   filter: "",       // "" = all, "__uncat", "__oneoff", or a category name
   search: "",
+  tab: "overview",  // which tab is showing
 };
 
 const TAXES = "Taxes";  // a set-aside, never charged to the card
@@ -59,20 +60,27 @@ const hideTip = () => { tip.hidden = true; };
 async function init() {
   [state.config, state.months] = await Promise.all([api("/config"), api("/months")]);
   if (state.config.user) $("#who").textContent = `Hi, ${state.config.user}`;
-  if (state.config.assistant_enabled) { $("#ask").hidden = false; loadChat(); }
+  if (state.config.assistant_enabled) {
+    $('#tabs [data-tab="ask"]').hidden = false;
+    loadChat();
+  }
+  // The address remembers month and tab, e.g. #2026-08/categories
+  const [fromHash, tabFromHash] = location.hash.slice(1).split("/");
   if (!state.months.length) {
-    $("#tiles").innerHTML = `<div class="tile"><div class="label">No data yet</div><div class="sub">Import a Chase CSV below to get started.</div></div>`;
+    $("#hero").innerHTML = `<div class="hero-empty"><div class="hero-main"><div class="label">Welcome</div>
+      <div class="big">No data yet</div><div class="yearly">Import your Chase CSVs to see your budget.</div></div></div>`;
     renderFilterOptions();
+    showTab("import");
     return;
   }
-  const fromHash = location.hash.slice(1);
+  showTab(tabFromHash || "overview");
   const known = state.months.map((m) => m.month);
   await selectMonth(known.includes(fromHash) ? fromHash : known[known.length - 1]);
 }
 
 async function selectMonth(month) {
   state.month = month;
-  history.replaceState(null, "", `#${month}`);
+  history.replaceState(null, "", `#${month}/${state.tab}`);
   [state.summary, state.txs] = await Promise.all([
     api(`/summary/${month}`),
     api(`/transactions?month=${month}`),
@@ -95,7 +103,7 @@ async function refreshAll() {
 // ---------- header + tiles ----------
 function renderMonthSelect() {
   $("#month-select").innerHTML = [...state.months].reverse()
-    .map((m) => `<option value="${m.month}" ${m.month === state.month ? "selected" : ""}>${monthName(m.month, "long")}</option>`)
+    .map((m) => `<option value="${m.month}" ${m.month === state.month ? "selected" : ""}>${monthName(m.month)} ${m.month.slice(0, 4)}</option>`)
     .join("");
 }
 
@@ -112,9 +120,21 @@ function partialNote(month) {
   return "";
 }
 
-// Top row reads as the money flow, left to right:
-//   Income − Fixed − Variable − One-offs (− tax set-aside) = Saved
-// Each big monthly number has its yearly equivalent in small text underneath.
+// ---------- tabs ----------
+function showTab(name) {
+  const button = $(`#tabs [data-tab="${name}"]`);
+  if (!button || button.hidden) name = "overview";
+  state.tab = name;
+  document.querySelectorAll(".view").forEach((v) => { v.hidden = v.dataset.view !== name; });
+  document.querySelectorAll("#tabs button").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === name));
+  if (state.month) history.replaceState(null, "", `#${state.month}/${name}`);
+  window.scrollTo({ top: 0 });
+}
+
+// ---------- headline card ----------
+// Left: what was saved this month and progress toward the yearly goal.
+// Right: the flow that produced it: income, fixed, variable spend, one-offs.
+// Each monthly number has its yearly equivalent in small text underneath.
 function renderTiles() {
   const s = state.summary;
   const c = state.config;
@@ -123,42 +143,61 @@ function renderTiles() {
   const uncatCount = state.txs.filter((t) => !t.category).length;
   const note = partialNote(s.month);
   const year = s.month.slice(0, 4);
-  const oneoffsYtd = oneoffsYearToDate();
+  const month = monthName(s.month, "long").split(" ")[0];
 
-  const tile = (label, value, yearly, sub = "") => `<div class="tile">
+  const stat = (label, value, sub) => `<div class="stat">
       <div class="label">${label}</div>
       <div class="value">${value}</div>
-      <div class="yearly">${yearly}</div>
-      ${sub ? `<div class="sub">${sub}</div>` : ""}
+      <div class="sub">${sub}</div>
     </div>`;
 
-  const tiles = [];
-  if (hasPlan) {
-    tiles.push(tile("Income (net)", money(c.monthly_net_income), `${money(c.monthly_net_income * 12)} / year`));
-    tiles.push(tile("Fixed costs", money(c.monthly_fixed_costs), `${money(c.monthly_fixed_costs * 12)} / year`,
-      c.fixed_costs.length ? `${c.fixed_costs.length} items · <a href="#flow" id="see-fixed">see breakdown</a>` : ""));
-  }
-  tiles.push(tile("Variable spend (card)", money(s.variable_total),
-    `≈ ${money(s.variable_total * 12)} / year at this pace`,
-    `target ${money(s.variable_target)} · ${badge(variance)}` +
-    (uncatCount ? `<br>incl. ${money(s.uncategorized_total)} uncategorized · <a href="#" id="fix-uncat">categorize</a>` : "") +
-    (note ? `<br>Month ${note}` : "")));
-  tiles.push(tile("One-offs", money(s.oneoff_total),
-    `${money(oneoffsYtd)} so far in ${year}`,
-    `${s.oneoffs.length} charge${s.oneoffs.length === 1 ? "" : "s"}, not in averages`));
+  let main;
   if (hasPlan) {
     const saved = savedThisMonth();
-    const goal = c.yearly_savings_goal;
     const perYear = savedPerYear();
+    const goal = c.yearly_savings_goal;
+    const pct = goal ? Math.max(0, Math.min(100, (perYear / goal) * 100)) : 0;
     const status = goal == null ? "" : perYear >= goal
-      ? `<span class="badge good">✓ on pace for ${money(goal)}</span>`
-      : `<span class="badge ${perYear >= 0 ? "warning" : "critical"}">▼ ${money(goal - perYear)} short of ${money(goal)}</span>`;
-    tiles.push(tile("Saved this month", money(saved), `≈ ${money(savedPerYear())} / year at this pace`, status));
+      ? `<span class="badge good">✓ on pace</span>`
+      : `<span class="badge ${perYear >= 0 ? "warning" : "critical"}">▼ ${money(goal - perYear)} short</span>`;
+    main = `<div class="hero-main">
+        <div class="label">Saved in ${month}</div>
+        <div class="big">${money(saved)}</div>
+        <div class="yearly">≈ ${money(perYear)} / year at this pace</div>
+        ${goal ? `<div class="goal">
+          <div class="goal-track" role="img" aria-label="${Math.round(pct)}% of yearly goal"><div class="goal-fill" style="width:${pct}%"></div></div>
+          <div class="goal-text"><span>Goal ${money(goal)} / year</span>${status}</div>
+        </div>` : ""}
+        ${note ? `<div class="note">Month ${note}</div>` : ""}
+      </div>`;
+  } else {
+    main = `<div class="hero-main">
+        <div class="label">Variable spend in ${month}</div>
+        <div class="big">${money(s.variable_total)}</div>
+        <div class="yearly">target ${money(s.variable_target)} · ${badge(variance)}</div>
+        ${note ? `<div class="note">Month ${note}</div>` : ""}
+      </div>`;
   }
-  $("#tiles").innerHTML = tiles.join("");
-  $("#tiles").classList.toggle("five", tiles.length === 5);
+
+  const stats = [];
+  if (hasPlan) {
+    stats.push(stat("Income (net)", money(c.monthly_net_income), `${money(c.monthly_net_income * 12)} / year`));
+    stats.push(stat("Fixed costs", money(c.monthly_fixed_costs),
+      `${money(c.monthly_fixed_costs * 12)} / year` +
+      (c.fixed_costs.length ? ` · <a href="#" id="see-fixed">details</a>` : "")));
+    stats.push(stat("Variable spend", money(s.variable_total),
+      `target ${money(s.variable_target)} · ${badge(variance)}` +
+      (uncatCount ? `<br>${money(s.uncategorized_total)} uncategorized · <a href="#" id="fix-uncat">fix</a>` : "")));
+  } else if (uncatCount) {
+    stats.push(stat("Uncategorized", money(s.uncategorized_total),
+      `${uncatCount} transactions · <a href="#" id="fix-uncat">fix</a>`));
+  }
+  stats.push(stat("One-offs", money(s.oneoff_total),
+    `${money(oneoffsYearToDate())} so far in ${year} · not in averages`));
+
+  $("#hero").innerHTML = main + `<div class="hero-stats">${stats.join("")}</div>`;
   const fix = $("#fix-uncat");
-  if (fix) fix.onclick = (e) => { e.preventDefault(); setFilter("__uncat"); $("#tx-table").scrollIntoView({ behavior: "smooth" }); };
+  if (fix) fix.onclick = (e) => { e.preventDefault(); setFilter("__uncat"); showTab("transactions"); };
   const seeFixed = $("#see-fixed");
   if (seeFixed) seeFixed.onclick = (e) => { e.preventDefault(); $("#fixed-details").open = true; $("#flow").scrollIntoView({ behavior: "smooth" }); };
   renderFlow();
@@ -310,7 +349,7 @@ function renderCategories() {
       </li>`;
   }).join("");
   $("#categories").querySelectorAll(".cat-row").forEach((li) => {
-    const go = () => { setFilter(state.filter === li.dataset.key ? "" : li.dataset.key); };
+    const go = () => { setFilter(li.dataset.key); showTab("transactions"); };
     li.addEventListener("click", go);
     li.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
   });
@@ -434,7 +473,7 @@ async function importFiles(files) {
     const askFlagged = $("#ask-flagged");
     if (askFlagged) askFlagged.onclick = () => {
       const list = flagged.map((f) => `${f.date} ${f.description} $${f.amount}`).join("; ");
-      $("#ask").scrollIntoView({ behavior: "smooth" });
+      showTab("ask");
       askAssistant(`I just imported new charges. These were flagged (one-offs or over $200): ${list}. Anything I should look at or recategorize?`);
     };
     await (state.months.length ? refreshAll() : init());
@@ -526,6 +565,7 @@ $("#chat-clear").addEventListener("click", async () => {
 });
 
 // ---------- wire up ----------
+document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
 $("#month-select").addEventListener("change", (e) => selectMonth(e.target.value));
 $("#cat-filter").addEventListener("change", (e) => setFilter(e.target.value));
 $("#search").addEventListener("input", (e) => { state.search = e.target.value; renderTransactions(); });
@@ -539,4 +579,4 @@ drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove
 // Redraw the chart when its width changes (phone rotation, window resize).
 new ResizeObserver(() => { if (state.months.length) renderTrend(); }).observe($("#trend-chart"));
 
-init().catch((err) => { $("#tiles").innerHTML = `<div class="tile"><div class="label">Couldn't load</div><div class="sub">${esc(err.message)}</div></div>`; });
+init().catch((err) => { $("#hero").innerHTML = `<div class="hero-empty"><div class="hero-main"><div class="label">Couldn't load</div><div class="yearly">${esc(err.message)}</div></div></div>`; });
