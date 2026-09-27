@@ -193,3 +193,9 @@ def test_icon_public_but_data_private(client, monkeypatch):
     assert client.get("/static/manifest.webmanifest").status_code == 200
     assert client.get("/static/app.js").status_code == 401
     assert client.get("/months").status_code == 401
+
+
+def test_page_links_versioned_assets(client):
+    r = client.get("/")
+    assert r.headers["cache-control"] == "no-cache"
+    assert "/static/app.js?v=" in r.text and "/static/style.css?v=" in r.text

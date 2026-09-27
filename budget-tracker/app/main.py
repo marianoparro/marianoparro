@@ -2,12 +2,13 @@
 Then open http://127.0.0.1:8000/docs for a clickable API explorer.
 """
 
+import hashlib
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -38,9 +39,28 @@ STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
+def _versioned_index() -> str:
+    """index.html with ?v=<content hash> on the CSS and JS links.
+
+    Browsers cache style.css and app.js; after an update they could pair the
+    new page with the old files (broken layout, dead buttons). A new hash on
+    every change forces a fresh download, and only when something changed.
+    """
+    html = (STATIC_DIR / "index.html").read_text()
+    for name in ("style.css", "app.js"):
+        digest = hashlib.sha256((STATIC_DIR / name).read_bytes()).hexdigest()[:10]
+        html = html.replace(f"/static/{name}", f"/static/{name}?v={digest}")
+    return html
+
+
+INDEX_HTML = _versioned_index()
+
+
 @app.get("/", include_in_schema=False)
 def index():
-    return FileResponse(STATIC_DIR / "index.html")
+    # no-cache: the browser re-checks the page itself on every visit, so it
+    # always sees the current version links above.
+    return HTMLResponse(INDEX_HTML, headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/config")
