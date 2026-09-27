@@ -14,6 +14,8 @@ const state = {
 };
 
 const TAXES = "Taxes";  // a set-aside, never charged to the card
+// "Fixed" is Auna (and similar) charged on the card: show a clearer name.
+const catLabel = (c) => (c === "Fixed" ? "Fixed on card (Auna)" : c);
 const FLAG_PCT = 30;    // same threshold the API uses for over_target
 
 // ---------- small helpers ----------
@@ -172,7 +174,7 @@ function renderTiles() {
       </div>`;
   } else {
     main = `<div class="hero-main">
-        <div class="label">Variable spend in ${month}</div>
+        <div class="label">Card spending in ${month}</div>
         <div class="big">${money(s.variable_total)}</div>
         <div class="yearly">target ${money(s.variable_target)} · ${badge(variance)}</div>
         ${note ? `<div class="note">Month ${note}</div>` : ""}
@@ -185,7 +187,7 @@ function renderTiles() {
     stats.push(stat("Fixed costs", money(c.monthly_fixed_costs),
       `${money(c.monthly_fixed_costs * 12)} / year` +
       (c.fixed_costs.length ? ` · <a href="#" id="see-fixed">details</a>` : "")));
-    stats.push(stat("Variable spend", money(s.variable_total),
+    stats.push(stat("Card spending", money(s.variable_total),
       `target ${money(s.variable_target)} · ${badge(variance)}` +
       (uncatCount ? `<br>${money(s.uncategorized_total)} uncategorized · <a href="#" id="fix-uncat">fix</a>` : "")));
   } else if (uncatCount) {
@@ -249,27 +251,54 @@ function renderFlow() {
     ${c.fixed_costs.length
       ? `<details id="fixed-details" ${wasOpen ? "open" : ""}><summary>${fixedRow}</summary>${fixedItems}</details>`
       : fixedRow}
-    ${row("− Variable spend (card)", s.variable_total, s.variable_total * 12)}
+    ${row("− Card spending (excl. one-offs)", s.variable_total, s.variable_total * 12)}
     ${row("− Tax set-aside", c.monthly_tax_setaside, c.monthly_tax_setaside * 12)}
     ${row(`− One-offs <span class="hint">year = paid so far in ${s.month.slice(0, 4)}</span>`, s.oneoff_total, oneoffsYearToDate())}
     ${row("= Saved", savedThisMonth(), savedPerYear(), "total")}
     ${c.yearly_savings_goal ? row("Goal", c.yearly_savings_goal / 12, c.yearly_savings_goal, "goal") : ""}`;
 }
 
-// ---------- trend chart (hand-built SVG) ----------
-// Single series (spend per month) + a dashed target line. The selected month
-// is full strength with a value label; others are dimmed. Hover any column for
-// details, click to open that month.
+// ---------- charts (hand-built SVG) ----------
+// One bar-chart function, used twice:
+//  - "All card spending": each bar stacks regular spending + one-offs
+//  - "Card spending excl. one-offs": one series against the target line
+// The selected month is full strength with a value label; others are dimmed.
+// Hover any column for details, click it to open that month.
 function renderTrend() {
-  const el = $("#trend-chart");
+  const data = state.months;
+  barChart($("#all-chart"), {
+    segments: [
+      { cls: "bar", value: (d) => d.variable_total, label: "Regular" },
+      { cls: "bar s2", value: (d) => d.oneoff_total, label: "One-offs" },
+    ],
+    total: (d) => d.card_total,
+    tip: (d) => `<b>${monthName(d.month, "long")}</b><br>All card spending ${money(d.card_total)}` +
+      `<br>Regular ${money(d.variable_total)} · One-offs ${money(d.oneoff_total)}`,
+    aria: "All card spending per month, regular spending plus one-offs",
+  });
+  const target = data[0]?.variable_target ?? 0;
+  barChart($("#trend-chart"), {
+    segments: [{ cls: "bar", value: (d) => d.variable_total }],
+    total: (d) => d.variable_total,
+    target,
+    tip: (d) => {
+      const pct = target ? Math.round(((d.variable_total - target) / target) * 100) : 0;
+      return `<b>${monthName(d.month, "long")}</b><br>Card spending ${money(d.variable_total)} (${pct >= 0 ? "+" : ""}${pct}% vs target)` +
+        (d.oneoff_total ? `<br>One-offs ${money(d.oneoff_total)} not included` : "");
+    },
+    aria: "Card spending excluding one-offs per month, versus target",
+  });
+  $("#trend-note").textContent = `Target ${money(target)} = your category targets, incl. Auna and the ${money(state.config.monthly_tax_setaside)} tax set-aside`;
+}
+
+function barChart(el, { segments, total, target = 0, tip, aria }) {
   const data = state.months;
   const W = Math.max(el.clientWidth, 300), H = 220;
   const m = { top: 18, right: 8, bottom: 24, left: 44 };
   const iw = W - m.left - m.right, ih = H - m.top - m.bottom;
-  const target = data[0]?.variable_target ?? 0;
 
   // y-scale: 0 .. a "nice" max above both the data and the target
-  const rawMax = Math.max(target, ...data.map((d) => d.variable_total)) * 1.08;
+  const rawMax = Math.max(target, 1, ...data.map(total)) * 1.08;
   const step = niceStep(rawMax / 4);
   const yMax = Math.ceil(rawMax / step) * step;
   const y = (v) => m.top + ih - (v / yMax) * ih;
@@ -278,7 +307,7 @@ function renderTrend() {
   const barW = Math.min(44, band * 0.6);
   const x = (i) => m.left + band * i + (band - barW) / 2;
 
-  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Monthly variable spend versus target">
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${aria}">
     <defs><pattern id="partial-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
       <line x1="0" y1="0" x2="0" y2="6" class="hatch-line"/></pattern></defs>`;
   for (let v = 0; v <= yMax; v += step) {
@@ -287,12 +316,22 @@ function renderTrend() {
   }
   data.forEach((d, i) => {
     const sel = d.month === state.month;
-    const h = Math.max(0, y(0) - y(d.variable_total));
-    svg += `<path class="bar ${sel ? "" : "dim"}" d="${topRoundedBar(x(i), y(0), barW, h, 4)}"/>`;
+    // Stack segments bottom-up; only the top one gets rounded corners, and a
+    // 2px gap separates them.
+    const parts = segments.map((sg) => ({ ...sg, v: Math.max(0, sg.value(d)) })).filter((p) => p.v > 0);
+    let base = 0;
+    parts.forEach((p, k) => {
+      const gap = k > 0 ? 2 : 0;
+      const yBase = y(base) - gap, h = Math.max(0, y(base) - y(base + p.v) - gap);
+      const shape = k === parts.length - 1 ? topRoundedBar(x(i), yBase, barW, h, 4) : `M${x(i)},${yBase} h${barW} v${-h} h${-barW} Z`;
+      svg += `<path class="${p.cls} ${sel ? "" : "dim"}" d="${shape}"/>`;
+      base += p.v;
+    });
     const partial = partialNote(d.month);
-    if (partial) svg += `<path class="bar-partial" d="${topRoundedBar(x(i), y(0), barW, h, 4)}"/>`;
+    const top = y(Math.max(0, total(d)));
+    if (partial) svg += `<path class="bar-partial" d="${topRoundedBar(x(i), y(0), barW, y(0) - top, 4)}"/>`;
     svg += `<text class="axis-label" x="${x(i) + barW / 2}" y="${H - 6}" text-anchor="middle">${monthName(d.month)}${partial ? "*" : ""}</text>`;
-    if (sel) svg += `<text class="value-label" x="${x(i) + barW / 2}" y="${y(d.variable_total) - 6}" text-anchor="middle">${money(d.variable_total)}</text>`;
+    if (sel) svg += `<text class="value-label" x="${x(i) + barW / 2}" y="${top - 6}" text-anchor="middle">${money(total(d))}</text>`;
     // invisible full-height hit area: easier to hover/tap than the bar itself
     svg += `<rect class="hit" data-i="${i}" x="${m.left + band * i}" y="${m.top}" width="${band}" height="${ih}"/>`;
   });
@@ -305,15 +344,11 @@ function renderTrend() {
 
   el.querySelectorAll(".hit").forEach((r) => {
     const d = data[Number(r.dataset.i)];
-    const pct = target ? Math.round(((d.variable_total - target) / target) * 100) : 0;
-    r.addEventListener("mousemove", (e) => showTip(e,
-      `<b>${monthName(d.month, "long")}</b><br>Variable ${money(d.variable_total)} (${pct >= 0 ? "+" : ""}${pct}% vs target)` +
-      (d.oneoff_total ? `<br>One-offs ${money(d.oneoff_total)} (excluded)` : "") +
+    r.addEventListener("mousemove", (e) => showTip(e, tip(d) +
       (partialNote(d.month) ? `<br><i>* ${partialNote(d.month)}</i>` : "")));
     r.addEventListener("mouseleave", hideTip);
     r.addEventListener("click", () => { hideTip(); selectMonth(d.month); });
   });
-  $("#trend-note").textContent = `Excludes fixed costs and one-offs · target includes ${money(state.config.monthly_tax_setaside)} tax set-aside`;
 }
 
 function niceStep(raw) {
@@ -340,7 +375,7 @@ function renderCategories() {
     const key = r.key || r.category;
     const pct = (v) => `${Math.min(100, (Math.max(0, v) / max) * 100)}%`;
     return `<li class="cat-row ${state.filter === key ? "active" : ""}" data-key="${esc(key)}" tabindex="0">
-        <span class="name">${esc(r.category)}</span>
+        <span class="name">${esc(catLabel(r.category))}</span>
         <span class="nums"><b>${money(r.actual)}</b>${r.target ? ` / ${money(r.target)}` : ""} ${badge(r.variance_pct)}</span>
         <span class="meter" aria-hidden="true">
           <span class="fill" style="width:${pct(r.actual)}"></span>
@@ -375,7 +410,7 @@ function renderFilterOptions() {
   const cats = state.config.categories;
   $("#cat-filter").innerHTML =
     `<option value="">All categories</option><option value="__uncat">Uncategorized</option><option value="__oneoff">One-offs</option>` +
-    cats.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
+    cats.map((c) => `<option value="${esc(c)}">${esc(catLabel(c))}</option>`).join("");
   $("#cat-filter").value = state.filter;
 }
 
@@ -394,7 +429,7 @@ function renderTransactions() {
   const rows = visibleTxs().slice().sort((a, b) => b.date.localeCompare(a.date) || b.amount - a.amount);
   const options = (current) =>
     `<option value="" ${!current ? "selected" : ""}>— Uncategorized —</option>` +
-    state.config.categories.map((c) => `<option value="${esc(c)}" ${c === current ? "selected" : ""}>${esc(c)}</option>`).join("");
+    state.config.categories.map((c) => `<option value="${esc(c)}" ${c === current ? "selected" : ""}>${esc(catLabel(c))}</option>`).join("");
 
   $("#tx-table tbody").innerHTML = rows.map((t) => {
     const flags = [t.is_oneoff && "one-off", t.is_fixed && "fixed"].filter(Boolean).join(" · ");
@@ -577,6 +612,8 @@ drop.addEventListener("dragleave", () => drop.classList.remove("over"));
 drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); importFiles(e.dataTransfer.files); });
 
 // Redraw the chart when its width changes (phone rotation, window resize).
-new ResizeObserver(() => { if (state.months.length) renderTrend(); }).observe($("#trend-chart"));
+const resize = new ResizeObserver(() => { if (state.months.length) renderTrend(); });
+resize.observe($("#trend-chart"));
+resize.observe($("#all-chart"));
 
 init().catch((err) => { $("#hero").innerHTML = `<div class="hero-empty"><div class="hero-main"><div class="label">Couldn't load</div><div class="yearly">${esc(err.message)}</div></div></div>`; });

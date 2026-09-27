@@ -70,10 +70,22 @@
         <div id="flow-body"></div>
       </section>
 
-      <!-- Variable spend per month vs target; click a bar to open that month -->
+      <!-- Everything on the card per month: regular + one-offs -->
       <section class="card">
         <div class="card-head">
-          <h2>Monthly variable spend</h2>
+          <h2>All card spending</h2>
+          <div class="legend" aria-hidden="true">
+            <span><i class="swatch"></i>Regular</span>
+            <span><i class="swatch s2"></i>One-offs</span>
+          </div>
+        </div>
+        <div class="chart" id="all-chart"></div>
+      </section>
+
+      <!-- Card spending without one-offs, vs target; click a bar to open that month -->
+      <section class="card">
+        <div class="card-head">
+          <h2>Card spending, excluding one-offs</h2>
           <p class="muted" id="trend-note"></p>
         </div>
         <div class="chart" id="trend-chart"></div>

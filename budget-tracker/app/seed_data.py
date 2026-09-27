@@ -16,6 +16,9 @@ BUDGET_TARGETS = {
     "Shopping": 500,
     "Entertainment": 150,
     "Personal": 100,
+    # Auna (parents insurance + Maura care) is charged on the Chase card, so it
+    # counts as card spending; its budget lives here rather than in FIXED_COSTS.
+    "Fixed": 450,
 }
 
 # Two special categories that drive the is_oneoff / is_fixed flags.

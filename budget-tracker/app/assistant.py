@@ -44,7 +44,7 @@ class AssistantUnavailable(Exception):
 
 def _variable_filter(alias: str = "") -> str:
     p = f"{alias}." if alias else ""
-    return f"{p}is_oneoff = 0 AND {p}is_fixed = 0"
+    return f"{p}is_oneoff = 0"
 
 
 def monthly_table(conn) -> list[dict]:
@@ -135,8 +135,8 @@ TOOLS = [
         "name": "top_merchants",
         "description": (
             "Total spend per merchant (cleaned merchant name), largest first. Best first "
-            "step for 'why is X so high' or 'where does our money go'. One-offs and fixed "
-            "costs are excluded unless a category of 'One-off'/'Fixed' is given."
+            "step for 'why is X so high' or 'where does our money go'. One-offs "
+            "are excluded unless category 'One-off' is given."
         ),
         "input_schema": {
             "type": "object",
@@ -228,7 +228,7 @@ def tool_top_merchants(conn, args: dict) -> dict:
     params: list = [start, end]
     category = args.get("category")
     where = "month BETWEEN ? AND ?" + _category_clause(category, params)
-    if category not in (ONEOFF, FIXED):
+    if category != ONEOFF:
         where += " AND " + _variable_filter()
     limit = max(1, min(int(args.get("limit") or 15), 50))
     rows = conn.execute(
@@ -269,9 +269,9 @@ INSTRUCTIONS = """You are the family budget assistant for a household that track
 
 How the numbers work:
 - Card transactions come from Chase CSV exports. Amounts are USD; positive = spent, negative = refund.
-- "Variable spend" = card spending excluding one-offs and fixed costs. It is compared against monthly targets per category.
+- "Card spending" = everything on the card except one-offs (Auna insurance, category "Fixed", is included). It is compared against monthly targets per category. "All card spending" adds the one-offs back.
 - One-offs (moves, immigration fees, large medical bills over $100, one-time purchases) are recorded but excluded from averages and targets. Mention them separately when relevant.
-- Fixed costs (rent, school, insurance, etc.) are paid outside the card or tagged Fixed; they are not variable spend.
+- Fixed costs in the plan (rent, domestic help, school, etc.) are paid outside the card and are not in the transactions.
 - "Taxes" is a monthly set-aside for the year-end tax bill, never a card charge. Its actual is always $0; don't call it underspent.
 - Months marked partial (data starts mid-month, or the month is still in progress) are not comparable to full months. Say so when they come up.
 - Averages below use the last 3 complete months.

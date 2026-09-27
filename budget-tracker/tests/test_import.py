@@ -151,7 +151,18 @@ def test_frontend_and_months(client, monkeypatch):
     april = months[1]
     # same number /summary reports: everything except one-offs and fixed
     assert april["variable_total"] == client.get("/summary/2026-04").json()["variable_total"]
-    assert april["variable_target"] == 5365
+    assert april["variable_target"] == 5815  # 5,365 + 450 for Auna (on the card)
+    # all card spending = everything, including one-offs
+    assert april["card_total"] == round(april["variable_total"] + april["oneoff_total"], 2)
+
+
+def test_auna_counts_as_card_spending(client):
+    upload(client)
+    s = client.get("/summary/2026-04").json()
+    fixed = next(c for c in s["categories"] if c["category"] == "Fixed")
+    assert fixed["actual"] == 431.01 and fixed["target"] == 450
+    others = sum(c["actual"] for c in s["categories"] if c["category"] != "Fixed")
+    assert s["variable_total"] == round(others + 431.01 + s["uncategorized_total"], 2)
 
 
 def test_config_reads_income_from_env(client, monkeypatch):

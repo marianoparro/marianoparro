@@ -78,7 +78,7 @@ def config(request: Request):
         # The chat is optional (it's the only part that costs money): the page
         # hides it entirely when no API key is set.
         "assistant_enabled": settings.optional("ANTHROPIC_API_KEY") is not None,
-        "categories": categories + [ONEOFF, FIXED],
+        "categories": categories + [c for c in (ONEOFF, FIXED) if c not in categories],
         **settings.plan(),  # income, fixed costs (itemized), savings goal
         "monthly_tax_setaside": tax["monthly_target"] if tax else 0,
     }
@@ -93,8 +93,9 @@ def months():
         ).fetchone()
         rows = conn.execute(
             """SELECT month,
-                      ROUND(SUM(CASE WHEN is_oneoff = 0 AND is_fixed = 0 THEN amount ELSE 0 END), 2)
+                      ROUND(SUM(CASE WHEN is_oneoff = 0 THEN amount ELSE 0 END), 2)
                         AS variable_total,
+                      ROUND(SUM(amount), 2) AS card_total,
                       ROUND(SUM(CASE WHEN is_oneoff = 1 THEN amount ELSE 0 END), 2) AS oneoff_total,
                       MIN(date) AS first_date,
                       MAX(date) AS last_date
@@ -217,7 +218,7 @@ def summary(month: str):
             r["category"]: r["total"]
             for r in conn.execute(
                 """SELECT category, ROUND(SUM(amount), 2) AS total FROM transactions
-                   WHERE month = ? AND is_oneoff = 0 AND is_fixed = 0
+                   WHERE month = ? AND is_oneoff = 0
                      AND category IS NOT NULL
                    GROUP BY category""",
                 (month,),
@@ -226,7 +227,7 @@ def summary(month: str):
         extras = conn.execute(
             """SELECT
                  ROUND(COALESCE(SUM(CASE WHEN category IS NULL AND is_oneoff = 0
-                                          AND is_fixed = 0 THEN amount END), 0), 2) AS uncategorized,
+                                          THEN amount END), 0), 2) AS uncategorized,
                  ROUND(COALESCE(SUM(CASE WHEN is_oneoff = 1 THEN amount END), 0), 2) AS oneoffs,
                  ROUND(COALESCE(SUM(CASE WHEN is_fixed = 1 THEN amount END), 0), 2) AS fixed
                FROM transactions WHERE month = ?""",
