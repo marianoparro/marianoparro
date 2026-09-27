@@ -122,3 +122,8 @@ def test_chat_hidden_without_key(client, monkeypatch):  # noqa: F811
     assert client.get("/config").json()["assistant_enabled"] is False
     monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
     assert client.get("/config").json()["assistant_enabled"] is True
+
+
+def test_none_means_no_key(client, monkeypatch):  # noqa: F811
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "none")
+    assert client.get("/config").json()["assistant_enabled"] is False

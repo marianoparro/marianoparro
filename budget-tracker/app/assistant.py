@@ -298,7 +298,7 @@ def build_system(conn) -> list[dict]:
         "average_last_3_complete_months": rolling_averages(table),
         "categories": sorted(targets) + [ONEOFF, FIXED, UNCATEGORIZED],
     }
-    notes = os.environ.get("HOUSEHOLD_NOTES", "").strip()
+    notes = settings.optional("HOUSEHOLD_NOTES")
     text = INSTRUCTIONS
     if notes:
         text += "\n\nAbout this household (from the family):\n" + notes
@@ -313,9 +313,10 @@ def build_system(conn) -> list[dict]:
 # --------------------------------------------------------------- the loop
 
 def _client() -> anthropic.Anthropic:
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    key = settings.optional("ANTHROPIC_API_KEY")
+    if key is None:
         raise AssistantUnavailable("The assistant isn't set up yet: add ANTHROPIC_API_KEY on the server.")
-    return anthropic.Anthropic()
+    return anthropic.Anthropic(api_key=key)
 
 
 def ask(conn, history: list[dict], question: str, client=None) -> dict:

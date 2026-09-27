@@ -35,3 +35,10 @@ def plan() -> dict:
         "monthly_fixed_costs": round(sum(i["amount"] for i in items), 2) if items else env_money("MONTHLY_FIXED_COSTS"),
         "yearly_savings_goal": env_money("YEARLY_SAVINGS_GOAL"),
     }
+
+
+def optional(name: str) -> str | None:
+    """An optional text setting. Blank or "none" means not set (hosting forms
+    sometimes refuse an empty box, so "none" is the way to leave it out)."""
+    value = os.environ.get(name, "").strip()
+    return None if value.lower() in ("", "none", "-") else value
